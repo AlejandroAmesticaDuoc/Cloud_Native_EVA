@@ -1,0 +1,117 @@
+# ==========================================
+# VARIABLES Y SECRETOS
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+
+secrets/
+credentials/
+wallet/
+Wallet_*/
+**/Wallet_*/
+
+cwallet.sso
+ewallet.p12
+ewallet.pem
+keystore.jks
+truststore.jks
+
+# ==========================================
+# ANGULAR / NODE
+# ==========================================
+
+node_modules/
+dist/
+.angular/
+coverage/
+.npm/
+.nx/
+.cache/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# JAVA / SPRING BOOT
+# ==========================================
+
+target/
+build/
+.gradle/
+out/
+bin/
+
+*.class
+*.jar.original
+*.war
+*.ear
+
+.classpath
+.project
+.settings/
+
+# ==========================================
+# CONFIGURACIONES LOCALES
+# ==========================================
+
+application-local.properties
+application-local.yml
+application-local.yaml
+
+application-secret.properties
+application-secret.yml
+application-secret.yaml
+
+docker-compose.override.yml
+docker-data/
+
+# ==========================================
+# IDE
+# ==========================================
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+.vscode/
+.history/
+
+# ==========================================
+# SISTEMA OPERATIVO
+# ==========================================
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==========================================
+# LOGS Y TEMPORALES
+# ==========================================
+
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+
+# ==========================================
+# REPORTES DE PRUEBAS
+# ==========================================
+
+surefire-reports/
+failsafe-reports/
+test-results/
+playwright-report/
