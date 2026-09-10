@@ -2,6 +2,14 @@ spring:
   application:
     name: ms-pedidos360-bff
 
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: "${JWT_ISSUER_URI:https://login.microsoftonline.com/common/v2.0}"
+          audiences:
+            - "${JWT_AUDIENCE:00000000-0000-0000-0000-000000000000}"
+
 server:
   port: ${BFF_PORT:8080}
 
