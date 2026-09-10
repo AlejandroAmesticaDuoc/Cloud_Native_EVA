@@ -10,6 +10,10 @@ spring:
           audiences:
             - "${JWT_AUDIENCE:00000000-0000-0000-0000-000000000000}"
 
+app:
+  cors:
+    allowed-origins: "${ALLOWED_ORIGINS:http://localhost:4200}"
+
 server:
   port: ${BFF_PORT:8080}
 
