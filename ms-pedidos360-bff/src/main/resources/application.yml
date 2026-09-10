@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: ms-pedidos360-bff
+
+server:
+  port: ${BFF_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    cl.duoc.pedidos360.bff: INFO
