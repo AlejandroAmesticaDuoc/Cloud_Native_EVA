@@ -5,6 +5,10 @@ import cl.duoc.pedidos360.bff.security.JwtAuthenticationEntryPoint;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManagers;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -13,6 +17,7 @@ import org.springframework.security.oauth2.server.resource.authentication.Delega
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
@@ -40,11 +45,95 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(
                                 DispatcherType.ERROR
                         ).permitAll()
+
                         .requestMatchers(
+                                HttpMethod.GET,
                                 "/actuator/health",
                                 "/actuator/health/**"
                         ).permitAll()
-                        .anyRequest().hasAuthority(REQUIRED_SCOPE)
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/auth/me"
+                        ).hasAuthority(REQUIRED_SCOPE)
+
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/v1/orders/{id}/status"
+                        ).access(scopeAndAnyRole(
+                                "ADMIN",
+                                "OPERADOR"
+                        ))
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/orders/{id}/cancel"
+                        ).access(scopeAndAnyRole(
+                                "ADMIN",
+                                "OPERADOR",
+                                "CLIENTE"
+                        ))
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/orders"
+                        ).access(scopeAndAnyRole(
+                                "CLIENTE",
+                                "OPERADOR"
+                        ))
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/orders",
+                                "/api/v1/orders/{id}"
+                        ).access(scopeAndAnyRole(
+                                "ADMIN",
+                                "OPERADOR",
+                                "CLIENTE"
+                        ))
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/catalog"
+                        ).access(scopeAndAnyRole("ADMIN"))
+
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/v1/catalog/{id}"
+                        ).access(scopeAndAnyRole("ADMIN"))
+
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/v1/catalog/{id}/stock"
+                        ).access(scopeAndAnyRole("ADMIN"))
+
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/v1/catalog/{id}"
+                        ).access(scopeAndAnyRole("ADMIN"))
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/catalog",
+                                "/api/v1/catalog/{id}"
+                        ).hasAuthority(REQUIRED_SCOPE)
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/reports/summary",
+                                "/api/v1/reports/lead-time"
+                        ).access(scopeAndAnyRole("ADMIN"))
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/audit",
+                                "/api/v1/audit/orders/{orderId}"
+                        ).access(scopeAndAnyRole(
+                                "ADMIN",
+                                "AUDITOR"
+                        ))
+
+                        .anyRequest().denyAll()
                 )
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(
@@ -94,5 +183,19 @@ public class SecurityConfig {
         );
 
         return authenticationConverter;
+    }
+
+    private static AuthorizationManager<RequestAuthorizationContext>
+            scopeAndAnyRole(String... roles) {
+
+        return AuthorizationManagers
+                .<RequestAuthorizationContext>allOf(
+                        AuthorityAuthorizationManager.hasAuthority(
+                                REQUIRED_SCOPE
+                        ),
+                        AuthorityAuthorizationManager.hasAnyRole(
+                                roles
+                        )
+                );
     }
 }

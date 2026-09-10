@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -28,16 +27,13 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(SecurityConfigTest.ProtectedTestController.class)
 class SecurityConfigTest {
 
     private static final String PROTECTED_PATH =
-            "/api/v1/security-test";
+            "/api/v1/auth/me";
 
     private static final String REQUIRED_SCOPE =
             "SCOPE_pedidos360.access";
@@ -125,9 +121,7 @@ class SecurityConfigTest {
                                         REQUIRED_SCOPE
                                 )
                         )))
-                .andExpect(status().isOk())
-                .andExpect(content()
-                        .string("acceso permitido"));
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -162,14 +156,5 @@ class SecurityConfigTest {
                 "ROLE_CLIENTE",
                 "ROLE_AUDITOR"
         )));
-    }
-
-    @RestController
-    static class ProtectedTestController {
-
-        @GetMapping(PROTECTED_PATH)
-        String protectedEndpoint() {
-            return "acceso permitido";
-        }
     }
 }
