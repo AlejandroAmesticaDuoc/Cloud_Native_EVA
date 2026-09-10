@@ -2,6 +2,11 @@ spring:
   application:
     name: ms-pedidos360-bff
 
+  http:
+    clients:
+      connect-timeout: "${BFF_HTTP_CONNECT_TIMEOUT:3s}"
+      read-timeout: "${BFF_HTTP_READ_TIMEOUT:10s}"
+
   security:
     oauth2:
       resourceserver:
@@ -13,6 +18,12 @@ spring:
 app:
   cors:
     allowed-origins: "${ALLOWED_ORIGINS:http://localhost:4200}"
+
+  clients:
+    orders:
+      base-url: "${ORDERS_SERVICE_URL:http://localhost:8081}"
+    catalog:
+      base-url: "${CATALOG_SERVICE_URL:http://localhost:8082}"
 
 server:
   port: ${BFF_PORT:8080}
