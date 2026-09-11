@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
 @RestController
 @RequestMapping("/api/v1/catalog")
@@ -47,6 +50,16 @@ public class CatalogController {
     }
 
     @PostMapping
+    @ApiResponse(
+            responseCode = "201",
+            description = "Producto creado correctamente",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(
+                            implementation = ProductResponse.class
+                    )
+            )
+    )    
     public ResponseEntity<ProductResponse> createProduct(
             @Valid
             @RequestBody
@@ -93,6 +106,11 @@ public class CatalogController {
     }
 
     @DeleteMapping("/{id}")
+        @ApiResponse(
+            responseCode = "204",
+            description = "Producto desactivado correctamente",
+            content = @Content
+    )
     public ResponseEntity<Void> deactivateProduct(
             @PathVariable("id")
             @Positive(message =

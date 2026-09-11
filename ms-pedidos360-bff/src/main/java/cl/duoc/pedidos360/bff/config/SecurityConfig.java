@@ -19,6 +19,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authorization.AuthorizationDecision;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
@@ -34,8 +36,9 @@ public class SecurityConfig {
             JwtAuthenticationEntryPoint authenticationEntryPoint,
             JwtAccessDeniedHandler accessDeniedHandler,
             JwtAuthenticationConverter jwtAuthenticationConverter,
-            UrlBasedCorsConfigurationSource corsConfigurationSource)
-            throws Exception {
+            UrlBasedCorsConfigurationSource corsConfigurationSource,
+            @Value("${springdoc.api-docs.enabled:false}")
+            boolean apiDocsEnabled) throws Exception {
 
         http
                 .cors(cors -> cors.configurationSource(
@@ -50,6 +53,18 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(
                                 DispatcherType.ERROR
                         ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/v3/api-docs",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**"
+                        ).access((authentication, context) ->
+                                new AuthorizationDecision(
+                                        apiDocsEnabled
+                                ))                        
 
                         .requestMatchers(
                                 HttpMethod.GET,

@@ -47,3 +47,17 @@ logging:
   level:
     root: INFO
     cl.duoc.pedidos360.bff: INFO
+
+springdoc:
+  api-docs:
+    enabled: "${API_DOCS_ENABLED:false}"
+
+  swagger-ui:
+    enabled: "${API_DOCS_ENABLED:false}"
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    persist-authorization: false
+
+  packages-to-scan: cl.duoc.pedidos360.bff.controller
+  paths-to-match: /api/v1/**
+  override-with-generic-response: false    

@@ -20,6 +20,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
 @RestController
 @RequestMapping("/api/v1/orders")
@@ -58,7 +61,16 @@ public class OrdersController {
                 currentUser(authentication)
         );
     }
-
+    @ApiResponse(
+            responseCode = "201",
+            description = "Pedido creado correctamente",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(
+                            implementation = OrderResponse.class
+                    )
+            )
+    )
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(
             @Valid
@@ -94,6 +106,12 @@ public class OrdersController {
     }
 
     @PostMapping("/{id}/cancel")
+        @ApiResponse(
+            responseCode = "204",
+            description = "Pedido cancelado correctamente",
+            content = @Content
+    )
+    
     public ResponseEntity<Void> cancelOrder(
             @PathVariable
             @Positive(message =
