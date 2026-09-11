@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: ms-pedidos360-bff
+
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+  http:
+    clients:
+      connect-timeout: "${BFF_HTTP_CONNECT_TIMEOUT:3s}"
+      read-timeout: "${BFF_HTTP_READ_TIMEOUT:10s}"
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: "${JWT_ISSUER_URI:https://login.microsoftonline.com/common/v2.0}"
+          audiences:
+            - "${JWT_AUDIENCE:00000000-0000-0000-0000-000000000000}"
+
+app:
+  cors:
+    allowed-origins: "${ALLOWED_ORIGINS:http://localhost:4200}"
+
+  clients:
+    orders:
+      base-url: "${ORDERS_SERVICE_URL:http://localhost:8081}"
+    catalog:
+      base-url: "${CATALOG_SERVICE_URL:http://localhost:8082}"
+
+server:
+  port: ${BFF_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    cl.duoc.pedidos360.bff: INFO
+
+springdoc:
+  api-docs:
+    enabled: "${API_DOCS_ENABLED:false}"
+
+  swagger-ui:
+    enabled: "${API_DOCS_ENABLED:false}"
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    persist-authorization: false
+
+  packages-to-scan: cl.duoc.pedidos360.bff.controller
+  paths-to-match: /api/v1/**
+  override-with-generic-response: false    
