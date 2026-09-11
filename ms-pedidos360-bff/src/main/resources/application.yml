@@ -2,6 +2,10 @@ spring:
   application:
     name: ms-pedidos360-bff
 
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
   http:
     clients:
       connect-timeout: "${BFF_HTTP_CONNECT_TIMEOUT:3s}"

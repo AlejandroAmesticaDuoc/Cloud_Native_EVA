@@ -11,13 +11,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.ArrayList;
 import java.util.List;
 
+import cl.duoc.pedidos360.bff.service.OrdersService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -44,28 +47,49 @@ class EndpointAuthorizationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @MockitoBean
+    private OrdersService ordersService;
+
     @Test
     void shouldApplyClienteOrderPermissions()
             throws Exception {
 
         mockMvc.perform(get(ORDERS_PATH)
-                        .with(jwtWithScopeAndRoles("CLIENTE")))
+                        .with(jwtWithScopeAndRoles(
+                                "CLIENTE"
+                        )))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get(ORDERS_PATH + "/10")
-                        .with(jwtWithScopeAndRoles("CLIENTE")))
+                        .with(jwtWithScopeAndRoles(
+                                "CLIENTE"
+                        )))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post(ORDERS_PATH)
-                        .with(jwtWithScopeAndRoles("CLIENTE")))
-                .andExpect(status().isOk());
+                        .with(jwtWithScopeAndRoles(
+                                "CLIENTE"
+                        ))
+                        .contentType(
+                                MediaType.APPLICATION_JSON
+                        )
+                        .content(validCreateOrderBody()))
+                .andExpect(status().isCreated());
 
-        mockMvc.perform(post(ORDERS_PATH + "/10/cancel")
-                        .with(jwtWithScopeAndRoles("CLIENTE")))
-                .andExpect(status().isOk());
+        mockMvc.perform(post(
+                        ORDERS_PATH + "/10/cancel"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "CLIENTE"
+                        )))
+                .andExpect(status().isNoContent());
 
-        mockMvc.perform(patch(ORDERS_PATH + "/10/status")
-                        .with(jwtWithScopeAndRoles("CLIENTE")))
+        mockMvc.perform(patch(
+                        ORDERS_PATH + "/10/status"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "CLIENTE"
+                        )))
                 .andExpect(status().isForbidden());
     }
 
@@ -74,19 +98,37 @@ class EndpointAuthorizationTest {
             throws Exception {
 
         mockMvc.perform(post(ORDERS_PATH)
-                        .with(jwtWithScopeAndRoles("OPERADOR")))
-                .andExpect(status().isOk());
+                        .with(jwtWithScopeAndRoles(
+                                "OPERADOR"
+                        ))
+                        .contentType(
+                                MediaType.APPLICATION_JSON
+                        )
+                        .content(validCreateOrderBody()))
+                .andExpect(status().isCreated());
 
-        mockMvc.perform(patch(ORDERS_PATH + "/10/status")
-                        .with(jwtWithScopeAndRoles("OPERADOR")))
+        mockMvc.perform(patch(
+                        ORDERS_PATH + "/10/status"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "OPERADOR"
+                        ))
+                        .contentType(
+                                MediaType.APPLICATION_JSON
+                        )
+                        .content(validStatusBody()))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get(ORDERS_PATH)
-                        .with(jwtWithScopeAndRoles("AUDITOR")))
+                        .with(jwtWithScopeAndRoles(
+                                "AUDITOR"
+                        )))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(post(ORDERS_PATH)
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isForbidden());
     }
 
@@ -108,23 +150,35 @@ class EndpointAuthorizationTest {
             throws Exception {
 
         mockMvc.perform(post(CATALOG_PATH)
-                        .with(jwtWithScopeAndRoles("OPERADOR")))
+                        .with(jwtWithScopeAndRoles(
+                                "OPERADOR"
+                        )))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(post(CATALOG_PATH)
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isOk());
 
         mockMvc.perform(put(CATALOG_PATH + "/10")
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(patch(CATALOG_PATH + "/10/stock")
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+        mockMvc.perform(patch(
+                        CATALOG_PATH + "/10/stock"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isOk());
 
         mockMvc.perform(delete(CATALOG_PATH + "/10")
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isOk());
     }
 
@@ -132,16 +186,28 @@ class EndpointAuthorizationTest {
     void shouldRestrictReportsToAdmin()
             throws Exception {
 
-        mockMvc.perform(get("/api/v1/reports/summary")
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+        mockMvc.perform(get(
+                        "/api/v1/reports/summary"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/reports/lead-time")
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+        mockMvc.perform(get(
+                        "/api/v1/reports/lead-time"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/reports/summary")
-                        .with(jwtWithScopeAndRoles("AUDITOR")))
+        mockMvc.perform(get(
+                        "/api/v1/reports/summary"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "AUDITOR"
+                        )))
                 .andExpect(status().isForbidden());
     }
 
@@ -150,19 +216,29 @@ class EndpointAuthorizationTest {
             throws Exception {
 
         mockMvc.perform(get("/api/v1/audit")
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/audit")
-                        .with(jwtWithScopeAndRoles("AUDITOR")))
+                        .with(jwtWithScopeAndRoles(
+                                "AUDITOR"
+                        )))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/audit/orders/10")
-                        .with(jwtWithScopeAndRoles("AUDITOR")))
+        mockMvc.perform(get(
+                        "/api/v1/audit/orders/10"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "AUDITOR"
+                        )))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/audit")
-                        .with(jwtWithScopeAndRoles("CLIENTE")))
+                        .with(jwtWithScopeAndRoles(
+                                "CLIENTE"
+                        )))
                 .andExpect(status().isForbidden());
     }
 
@@ -170,7 +246,9 @@ class EndpointAuthorizationTest {
     void shouldRequireScopeEvenWithAllowedRole()
             throws Exception {
 
-        mockMvc.perform(get("/api/v1/reports/summary")
+        mockMvc.perform(get(
+                        "/api/v1/reports/summary"
+                )
                         .with(jwt().authorities(
                                 new SimpleGrantedAuthority(
                                         "ROLE_ADMIN"
@@ -184,11 +262,17 @@ class EndpointAuthorizationTest {
             throws Exception {
 
         mockMvc.perform(put(ORDERS_PATH + "/10")
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(get("/api/v1/no-definido")
-                        .with(jwtWithScopeAndRoles("ADMIN")))
+        mockMvc.perform(get(
+                        "/api/v1/no-definido"
+                )
+                        .with(jwtWithScopeAndRoles(
+                                "ADMIN"
+                        )))
                 .andExpect(status().isForbidden());
     }
 
@@ -211,31 +295,29 @@ class EndpointAuthorizationTest {
         return jwt().authorities(authorities);
     }
 
+    private String validCreateOrderBody() {
+        return """
+                {
+                  "items": [
+                    {
+                      "productId": 10,
+                      "quantity": 2
+                    }
+                  ]
+                }
+                """;
+    }
+
+    private String validStatusBody() {
+        return """
+                {
+                  "status": "ACEPTADO"
+                }
+                """;
+    }
+
     @RestController
     static class ContractTestController {
-
-        @GetMapping({
-                "/api/v1/orders",
-                "/api/v1/orders/{id}"
-        })
-        String getOrders() {
-            return "ok";
-        }
-
-        @PostMapping("/api/v1/orders")
-        String createOrder() {
-            return "ok";
-        }
-
-        @PatchMapping("/api/v1/orders/{id}/status")
-        String updateOrderStatus() {
-            return "ok";
-        }
-
-        @PostMapping("/api/v1/orders/{id}/cancel")
-        String cancelOrder() {
-            return "ok";
-        }
 
         @GetMapping({
                 "/api/v1/catalog",
