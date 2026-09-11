@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.bff.config;
 
+
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -12,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import cl.duoc.pedidos360.bff.service.OrdersService;
+import cl.duoc.pedidos360.bff.service.CatalogService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,11 +25,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest
@@ -49,6 +47,9 @@ class EndpointAuthorizationTest {
 
     @MockitoBean
     private OrdersService ordersService;
+
+    @MockitoBean
+    private CatalogService catalogService;
 
     @Test
     void shouldApplyClienteOrderPermissions()
@@ -150,37 +151,46 @@ class EndpointAuthorizationTest {
             throws Exception {
 
         mockMvc.perform(post(CATALOG_PATH)
-                        .with(jwtWithScopeAndRoles(
-                                "OPERADOR"
-                        )))
+                        .with(jwtWithScopeAndRoles("OPERADOR")))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(post(CATALOG_PATH)
-                        .with(jwtWithScopeAndRoles(
-                                "ADMIN"
-                        )))
-                .andExpect(status().isOk());
+                        .with(jwtWithScopeAndRoles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Teclado mecánico",
+                                  "price": 45990.00,
+                                  "stock": 20
+                                }
+                                """))
+                .andExpect(status().isCreated());
 
         mockMvc.perform(put(CATALOG_PATH + "/10")
-                        .with(jwtWithScopeAndRoles(
-                                "ADMIN"
-                        )))
+                        .with(jwtWithScopeAndRoles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Teclado mecánico RGB",
+                                  "price": 49990.00
+                                }
+                                """))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(patch(
-                        CATALOG_PATH + "/10/stock"
-                )
-                        .with(jwtWithScopeAndRoles(
-                                "ADMIN"
-                        )))
+        mockMvc.perform(patch(CATALOG_PATH + "/10/stock")
+                        .with(jwtWithScopeAndRoles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "stock": 15
+                                }
+                                """))
                 .andExpect(status().isOk());
 
         mockMvc.perform(delete(CATALOG_PATH + "/10")
-                        .with(jwtWithScopeAndRoles(
-                                "ADMIN"
-                        )))
-                .andExpect(status().isOk());
-    }
+                        .with(jwtWithScopeAndRoles("ADMIN")))
+                .andExpect(status().isNoContent());
+    }   
 
     @Test
     void shouldRestrictReportsToAdmin()
@@ -318,34 +328,6 @@ class EndpointAuthorizationTest {
 
     @RestController
     static class ContractTestController {
-
-        @GetMapping({
-                "/api/v1/catalog",
-                "/api/v1/catalog/{id}"
-        })
-        String getCatalog() {
-            return "ok";
-        }
-
-        @PostMapping("/api/v1/catalog")
-        String createProduct() {
-            return "ok";
-        }
-
-        @PutMapping("/api/v1/catalog/{id}")
-        String updateProduct() {
-            return "ok";
-        }
-
-        @PatchMapping("/api/v1/catalog/{id}/stock")
-        String updateStock() {
-            return "ok";
-        }
-
-        @DeleteMapping("/api/v1/catalog/{id}")
-        String deleteProduct() {
-            return "ok";
-        }
 
         @GetMapping({
                 "/api/v1/reports/summary",
