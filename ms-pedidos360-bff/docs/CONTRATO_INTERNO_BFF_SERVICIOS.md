@@ -6,7 +6,7 @@ Este documento describe las solicitudes que actualmente construye el BFF y las r
 
 La idea es que podamos desarrollar por separado y después integrar los componentes sin tener diferencias en rutas o formatos.
 
-Complementa el [contrato público de la API](CONTRATO_API.md). No reemplaza las reglas de negocio acordadas.
+Complementa el [contrato público de la API](../../docs/CONTRATO_API.md). No reemplaza las reglas de negocio acordadas.
 
 ## Estado del acuerdo
 

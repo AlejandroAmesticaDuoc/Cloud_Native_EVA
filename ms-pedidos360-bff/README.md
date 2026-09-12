@@ -29,7 +29,7 @@ Las rutas de auditoría y reportería tienen reglas de autorización, pero sus c
 El flujo local será:
 
 ```text
-Frontend Angular -> BFF -> Orders / Catalog -> Oracle Cloud
+Frontend Angular -> BFF -> Orders / Catalog -> PostgreSQL
 ```
 
 El flujo previsto en AWS será:
@@ -40,7 +40,7 @@ Frontend Angular -> AWS API Gateway -> BFF -> Microservicios
 
 El BFF vuelve a validar el token aunque API Gateway ya lo haya validado.
 
-Este componente no se conecta directamente a Oracle Cloud. La persistencia, las transiciones de estado, el descuento de stock y la mensajería corresponden a los microservicios.
+Este componente no se conecta directamente a PostgreSQL. La persistencia, las transiciones de estado, el descuento de stock y la mensajería corresponden a los microservicios. El cambio de base no modifica los contratos HTTP del BFF ni agrega un driver JDBC a este componente.
 
 ## Tecnologías
 
@@ -96,7 +96,7 @@ Desde la carpeta del BFF:
 .\mvnw.cmd clean test
 ```
 
-Estas pruebas utilizan solicitudes simuladas, respuestas HTTP controladas y un emisor JWT local de pruebas. No necesitan que Oracle, los microservicios o el tenant real estén funcionando.
+Estas pruebas utilizan solicitudes simuladas, respuestas HTTP controladas y un emisor JWT local de pruebas. No necesitan que PostgreSQL, los microservicios o el tenant real estén funcionando.
 
 El resultado esperado es `BUILD SUCCESS`.
 
@@ -129,7 +129,7 @@ La respuesta esperada contiene:
 }
 ```
 
-Esta comprobación solamente confirma la salud del BFF. No demuestra que Orders, Catalog u Oracle estén disponibles.
+Esta comprobación solamente confirma la salud del BFF. No demuestra que Orders, Catalog o PostgreSQL estén disponibles.
 
 Para detener la aplicación, utilizar `Ctrl + C`.
 
@@ -229,7 +229,7 @@ El BFF utiliza los siguientes códigos principales:
 | `502` | Fallo de comunicación o respuesta no utilizable del microservicio. |
 | `500` | Error interno inesperado del BFF. |
 
-El detalle del intercambio con los microservicios está en el [contrato interno](../docs/CONTRATO_INTERNO_BFF_SERVICIOS.md).
+El detalle del intercambio con los microservicios está en el [contrato interno](docs/CONTRATO_INTERNO_BFF_SERVICIOS.md).
 
 ## Seguridad del repositorio
 
@@ -237,8 +237,7 @@ No subir:
 
 - Access Tokens ni ID Tokens.
 - Contraseñas o client secrets.
-- Credenciales de AWS u Oracle.
-- Wallet de Oracle.
+- Credenciales de AWS o PostgreSQL.
 - Archivos locales con secretos.
 - La carpeta `target`.
 

@@ -16,35 +16,33 @@ Audit:     http://localhost:8085
 
 Los servicios se ejecutarán localmente mediante Docker cuando sea posible.
 
-La base de datos estará en Oracle Cloud. Docker se utilizará para ejecutar las aplicaciones, pero no reemplaza la base de datos.
+La base de datos será PostgreSQL. Para desarrollar se ejecutará en un contenedor local. Docker ejecuta el motor, no lo reemplaza.
 
-## Oracle Cloud
+## PostgreSQL
 
-Orders y Catalog se conectarán a Oracle Cloud mediante variables de entorno.
+Cada microservicio con persistencia utilizará una base y un usuario propios, configurados mediante variables de entorno. El primer componente preparado es Catalog.
 
 Datos necesarios:
 
 - URL JDBC.
 - Usuario.
 - Contraseña.
-- Wallet, si la conexión lo requiere.
-- Ruta configurada en `TNS_ADMIN`.
+- Certificado de confianza si la conexión cloud lo requiere.
 
-El Wallet y las credenciales nunca deben subirse a GitHub.
+Las credenciales nunca deben subirse a GitHub. Catalog usa `CATALOG_DB_URL`, `CATALOG_DB_USERNAME` y `CATALOG_DB_PASSWORD`. La plantilla de variables está en `.env.example`.
 
-Cuando se utilice Docker, el Wallet podrá montarse como un volumen de solo lectura.
+La preparación paso a paso está en [PostgreSQL local](POSTGRESQL_LOCAL.md). No hay que instalar el motor directamente en Windows si se utiliza Docker Desktop.
 
 Ejemplo conceptual:
 
 ```text
-Archivo Wallet en el computador
-        |
-        | volumen de solo lectura
-        v
-Contenedor Spring Boot
+Catalog ejecutado desde VS Code / Maven
         |
         v
-Oracle Cloud
+PostgreSQL local en Docker (127.0.0.1:5432)
+        |
+        v
+Volumen persistente de datos
 ```
 
 ## Microsoft Entra ID
@@ -102,8 +100,7 @@ Contraseñas
 Client secrets
 Tokens
 Credenciales de AWS
-Credenciales de Oracle
-Wallet de Oracle
+Credenciales de PostgreSQL
 ```
 
 ## Desarrollo local
@@ -114,18 +111,19 @@ El primer flujo será:
 Angular local
   -> BFF local
   -> Orders y Catalog locales
-  -> Oracle Cloud
+  -> PostgreSQL local
 ```
 
-El login de de Entra puede utilizarse desde localhost siempre que la URL esté registrada como redirect URI.
+El login de Entra puede utilizarse desde localhost siempre que la URL esté registrada como redirect URI.
 
 ## Docker Compose
 
-Docker Compose se utilizará para levantar:
+Por ahora `compose.postgres.yml` levanta solamente la base local. El Compose completo de aplicaciones es un trabajo pendiente de infraestructura y se utilizará para levantar:
 
 - BFF.
 - Orders.
 - Catalog.
+- PostgreSQL, si se decide administrarlo en contenedor en ese ambiente.
 - Posteriormente Notify.
 - RabbitMQ.
 - Kafka.
@@ -143,9 +141,15 @@ http://catalog-service:8082
 
 No se deben escribir direcciones IP fijas en el código.
 
+Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; una aplicación en la misma red Docker usaría `postgres:5432`. Los dos Compose no comparten red automáticamente: infraestructura debe integrar las redes antes de usar ese nombre.
+
 ## Despliegue AWS
 
 Una vez que la integración local funcione:
+
+Primero se debe acordar dónde alojar PostgreSQL en AWS. Puede ser un servicio administrado o una instalación gestionada por el equipo; no se ha creado ni contratado ninguno. Deben revisarse los costos, las copias de seguridad y el acceso privado antes de desplegar.
+
+El puerto 5432 no debe quedar abierto a Internet. Las conexiones cloud deben verificar el certificado del servidor (por ejemplo, `sslmode=verify-full` en la URL JDBC, con la CA correspondiente). No reutilizar contraseñas locales. La aplicación no debe utilizar un superusuario.
 
 1. Compilar los proyectos.
 2. Crear las imágenes Docker.
@@ -167,7 +171,7 @@ Frontend
   -> AWS API Gateway
   -> BFF en EC2
   -> Microservicios en EC2
-  -> Oracle Cloud
+  -> PostgreSQL en AWS (alojamiento por definir)
 ```
 
 ## CORS
@@ -213,7 +217,7 @@ No se utilizará `*` como origen en producción.
 - El frontend puede iniciar sesión.
 - El BFF acepta un token correcto.
 - El BFF rechaza un token incorrecto.
-- Orders y Catalog se conectan a Oracle Cloud.
+- Orders y Catalog se conectan a sus bases PostgreSQL y ejecutan las migraciones.
 - Las credenciales no aparecen en Git.
 - Las rutas coinciden con el contrato.
 - Los errores entregan códigos correctos.
@@ -226,4 +230,4 @@ No se utilizará `*` como origen en producción.
 - Un usuario autorizado puede acceder.
 - API Gateway enruta correctamente al BFF.
 - El BFF puede comunicarse con los microservicios.
-- Los microservicios pueden comunicarse con Oracle Cloud.
+- Los microservicios pueden comunicarse con PostgreSQL usando conexiones seguras.

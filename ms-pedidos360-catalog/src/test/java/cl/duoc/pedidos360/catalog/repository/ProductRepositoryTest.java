@@ -1,15 +1,9 @@
-package cl.duoc.pedidos360.catalog;
+package cl.duoc.pedidos360.catalog.repository;
 
-import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class MsPedidos360CatalogApplicationTests {
-
-	@Test
-	void contextLoads() {
-	}
-
+class ProductRepositoryTest extends ProductPersistenceContract {
 }
