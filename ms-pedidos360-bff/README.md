@@ -18,7 +18,9 @@ Se encuentra implementado:
 - Manejo de errores y tiempos de espera.
 - Documentación Swagger/OpenAPI.
 
-Al cierre de este bloque se verificaron 120 pruebas exitosas.
+Al cierre de este bloque se verificaron 124 pruebas exitosas.
+
+El BFF conserva el `403` cuando Orders rechaza el acceso por propiedad del pedido. Los IDs, cantidades y valores de stock enviados como decimales se rechazan con `400`; no se truncan a enteros.
 
 El JWT debe incluir expiración, además de superar la validación de firma, emisor, audiencia y vigencia. Un identificador no numérico devuelve `400` y un contenido incompatible devuelve `415`.
 

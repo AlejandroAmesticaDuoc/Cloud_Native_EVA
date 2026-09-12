@@ -63,7 +63,7 @@ Letras, números, punto, guion y guion bajo.
 
 Si falta o no cumple ese formato, genera un UUID para las llamadas internas de esa solicitud.
 
-Esto describe el header enviado hacia los servicios; no supone que todas las respuestas del BFF incluyan un header de traza.
+El BFF también incluye el header de traza en sus respuestas. En errores, el valor coincide con el `traceId` del cuerpo.
 
 ## Formato general
 
@@ -303,7 +303,7 @@ Cuerpo:
 
 El BFF reenvía el valor recibido; no realiza operaciones aritméticas sobre el stock.
 
-Antes de integrar, debemos confirmar con Catalog que este endpoint establece el stock final. No debe confundirse con el descuento de unidades que Orders solicita al aceptar un pedido.
+Catalog confirma que este endpoint establece el stock final. No debe confundirse con el descuento de unidades que Orders solicita al aceptar un pedido.
 
 ## Respuesta de un producto
 
@@ -344,12 +344,13 @@ Los clientes HTTP del BFF interpretan principalmente el código HTTP recibido. N
 | `400 Bad Request` | `400` con mensaje controlado. |
 | `404 Not Found` | `404` con mensaje controlado. |
 | `409 Conflict` | `409` con mensaje controlado. |
+| `403 Forbidden` de Orders | `403` con mensaje controlado, sin copiar el cuerpo interno. |
 | Otros errores `4xx` o `5xx` | `502 Bad Gateway`. |
 | Fallo de conexión o timeout | `502 Bad Gateway`. |
 | Cuerpo ausente donde se espera un objeto o una lista | `502 Bad Gateway`. |
 | JSON que el cliente HTTP no puede convertir al DTO esperado | `502 Bad Gateway`. |
 
-Importante: un `401` o `403` emitido por un microservicio actualmente se transforma en `502` en el BFF.
+Importante: un `401` de un microservicio se transforma en `502`; un `403` de Catalog también. Orders puede rechazar la propiedad de un pedido con `403`, y ese código se conserva.
 
 Esto es distinto de los `401` y `403` generados por la propia seguridad del BFF. Si ocurre durante la integración, debemos revisar la configuración de seguridad del servicio; no asumir que se reenviará el mismo código al frontend.
 

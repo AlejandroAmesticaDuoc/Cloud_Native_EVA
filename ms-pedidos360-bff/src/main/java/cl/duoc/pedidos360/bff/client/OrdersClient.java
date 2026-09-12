@@ -7,6 +7,7 @@ import cl.duoc.pedidos360.bff.dto.order.CreateOrderCommand;
 import cl.duoc.pedidos360.bff.dto.order.OrderResponse;
 import cl.duoc.pedidos360.bff.dto.order.UpdateOrderStatusRequest;
 import cl.duoc.pedidos360.bff.exception.DownstreamServiceException;
+import cl.duoc.pedidos360.bff.exception.ForbiddenOperationException;
 import cl.duoc.pedidos360.bff.exception.ResourceConflictException;
 import cl.duoc.pedidos360.bff.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -74,6 +75,12 @@ public class OrdersClient {
                             throw new ResourceConflictException(
                                     CONFLICT_MESSAGE
                             );
+                        }
+                )
+                .defaultStatusHandler(
+                        status -> status.value() == HttpStatus.FORBIDDEN.value(),
+                        (request, response) -> {
+                            throw new ForbiddenOperationException("El usuario no tiene permisos para acceder a este pedido");
                         }
                 )
                 .defaultStatusHandler(
