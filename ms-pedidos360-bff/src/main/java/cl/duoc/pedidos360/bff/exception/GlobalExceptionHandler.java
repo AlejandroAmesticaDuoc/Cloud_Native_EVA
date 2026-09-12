@@ -1,7 +1,8 @@
 package cl.duoc.pedidos360.bff.exception;
 
+import cl.duoc.pedidos360.bff.config.TraceIdFilter;
+
 import java.time.Instant;
-import java.util.UUID;
 
 import cl.duoc.pedidos360.bff.dto.common.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -80,7 +81,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             MethodArgumentNotValidException.class,
             HandlerMethodValidationException.class,
-            HttpMessageNotReadableException.class
+            HttpMessageNotReadableException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<ApiErrorResponse> handleInvalidRequest(
             Exception exception,
@@ -103,6 +105,13 @@ public class GlobalExceptionHandler {
                 exception.getMessage(),
                 request
         );
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnsupportedMediaType(
+            Exception exception, HttpServletRequest request) {
+        return buildResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "El contenido debe enviarse como application/json", request);
     }
 
     @ExceptionHandler(Exception.class)
@@ -161,16 +170,7 @@ public class GlobalExceptionHandler {
                 .body(response);
     }
 
-    private String resolveTraceId(
-            HttpServletRequest request) {
-
-        String traceId =
-                request.getHeader("X-Trace-Id");
-
-        if (traceId == null || traceId.isBlank()) {
-            return UUID.randomUUID().toString();
-        }
-
-        return traceId;
+    private String resolveTraceId(HttpServletRequest request) {
+        return TraceIdFilter.resolve(request);
     }
 }

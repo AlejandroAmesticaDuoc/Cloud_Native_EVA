@@ -194,4 +194,9 @@ class JwtAuthenticationIntegrationTest {
                 .andExpect(jsonPath("$.path")
                         .value(AUTH_ME_PATH));
     }    
+
+    @Test
+    void shouldRejectTokenWithoutExpiration() throws Exception {
+        assertUnauthorized(TEST_ISSUER.sign(TEST_ISSUER.claims().expirationTime(null).build()));
+    }
 }

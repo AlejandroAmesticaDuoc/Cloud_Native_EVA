@@ -1,10 +1,10 @@
 package cl.duoc.pedidos360.bff.client;
 
+import cl.duoc.pedidos360.bff.config.TraceIdFilter;
+
 import java.io.IOException;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
@@ -24,12 +24,6 @@ public class DownstreamRequestInterceptor
     public static final String TRACE_ID_HEADER =
             "X-Trace-Id";
 
-    private static final String TRACE_ID_ATTRIBUTE =
-            DownstreamRequestInterceptor.class.getName()
-                    + ".traceId";
-
-    private static final Pattern SAFE_TRACE_ID =
-            Pattern.compile("[A-Za-z0-9._-]{1,100}");
 
     @Override
     public ClientHttpResponse intercept(
@@ -72,43 +66,10 @@ public class DownstreamRequestInterceptor
     }
 
     private String resolveTraceId() {
-        RequestAttributes requestAttributes =
-                RequestContextHolder.getRequestAttributes();
-
-        if (!(requestAttributes
-                instanceof ServletRequestAttributes servletAttributes)) {
-            return UUID.randomUUID().toString();
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servletAttributes) {
+            return TraceIdFilter.resolve(servletAttributes.getRequest());
         }
-
-        HttpServletRequest servletRequest =
-                servletAttributes.getRequest();
-
-        Object storedTraceId = servletRequest.getAttribute(
-                TRACE_ID_ATTRIBUTE
-        );
-
-        if (storedTraceId instanceof String traceId) {
-            return traceId;
-        }
-
-        String receivedTraceId = servletRequest.getHeader(
-                TRACE_ID_HEADER
-        );
-
-        String traceId = isSafeTraceId(receivedTraceId)
-                ? receivedTraceId
-                : UUID.randomUUID().toString();
-
-        servletRequest.setAttribute(
-                TRACE_ID_ATTRIBUTE,
-                traceId
-        );
-
-        return traceId;
-    }
-
-    private boolean isSafeTraceId(String traceId) {
-        return traceId != null
-                && SAFE_TRACE_ID.matcher(traceId).matches();
+        return UUID.randomUUID().toString();
     }
 }

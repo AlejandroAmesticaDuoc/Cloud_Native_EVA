@@ -18,7 +18,11 @@ Se encuentra implementado:
 - Manejo de errores y tiempos de espera.
 - Documentación Swagger/OpenAPI.
 
-Al cierre de este bloque se verificaron 116 pruebas exitosas.
+Al cierre de este bloque se verificaron 120 pruebas exitosas.
+
+El JWT debe incluir expiración, además de superar la validación de firma, emisor, audiencia y vigencia. Un identificador no numérico devuelve `400` y un contenido incompatible devuelve `415`.
+
+`X-Trace-Id` se valida con el patrón `[A-Za-z0-9._-]{1,100}`. Si falta o no cumple el formato, se genera uno nuevo. El mismo identificador se utiliza en las llamadas internas, las respuestas y los errores.
 
 Esto no significa que la integración completa esté terminada. Todavía debemos probar con el tenant real de Entra ID, los microservicios del equipo, el frontend y AWS API Gateway.
 
