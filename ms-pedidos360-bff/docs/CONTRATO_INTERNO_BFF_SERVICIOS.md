@@ -367,20 +367,35 @@ Ejemplo de error público generado por el BFF:
 }
 ```
 
-# Auditoría y reportería
+# Auditoría
+
+El BFF utiliza `AUDIT_SERVICE_URL` (por defecto `http://localhost:8085`) para consultar:
+
+- `GET /api/v1/audit`
+- `GET /api/v1/audit/orders/{orderId}`
+
+Ambas rutas requieren scope `pedidos360.access` y rol ADMIN o AUDITOR. El BFF reenvía el JWT y X-Trace-Id; Audit también valida los permisos.
+
+Parámetros opcionales: `afterId=0` (entero no negativo) y `size=50` (entre 1 y 100). `orderId` debe ser positivo.
+
+La respuesta es un objeto `{"items": [], "nextAfterId": null}`, no un arreglo directo. Cada elemento contiene `id` (identificador local de auditoría), `recordedAt` y `event`. Este último conserva los 13 campos del evento de Orders: schemaVersion, eventId, eventType, orderId, aggregateVersion, occurredAt, traceId, actorId, customerId, previousStatus, status, createdAt y total.
+
+Se ordena por id local ascendente, es decir, orden de registro; no representa orden temporal global de negocio. Para continuar una consulta, enviar el nextAfterId recibido. Si es null, no había más filas en esa consulta. El historial puede crecer mientras se pagina: no es una exportación con snapshot. Un pedido sin eventos devuelve 200 y items vacío; no se consulta Orders para confirmar su existencia.
+
+Los parámetros inválidos se rechazan con 400 antes de llamar a Audit. Cualquier error HTTP de Audit, fallo de conexión, cuerpo ausente o JSON inválido se traduce a 502 controlado, sin copiar detalles internos. Esta es una excepción específica a la tabla general anterior.
+
+# Reportería
 
 Quedan pendientes las conexiones reales para:
 
 - `GET /api/v1/reports/summary`
 - `GET /api/v1/reports/lead-time`
-- `GET /api/v1/audit`
-- `GET /api/v1/audit/orders/{orderId}`
 
 Actualmente solo existen sus reglas de autorización y controladores simulados dentro de las pruebas.
 
-Antes de implementar los clientes HTTP debemos acordar los cuerpos de respuesta con el encargado de Report y Audit.
+Antes de implementar el cliente HTTP debemos acordar los cuerpos de respuesta de Report.
 
-Las variables `REPORT_SERVICE_URL` y `AUDIT_SERVICE_URL` aparecen en `.env.example`, pero el BFF todavía no las utiliza.
+La variable `REPORT_SERVICE_URL` aparece en `.env.example`, pero el BFF todavía no la utiliza.
 
 # Checklist de integración
 
@@ -388,7 +403,7 @@ Antes de dar por integrada esta parte, comprobar:
 
 - [ ] Orders y Catalog levantan con las URLs configuradas.
 - [ ] Las rutas internas incluyen `/api/v1`.
-- [ ] Las listas se entregan como arreglos JSON directos.
+- [ ] Orders y Catalog entregan arreglos JSON directos; Audit entrega una página con items y nextAfterId.
 - [ ] Orders acepta el `customerId` agregado por el BFF.
 - [ ] Orders filtra correctamente por `customerId`.
 - [ ] Las respuestas mantienen los nombres y tipos de los campos acordados.

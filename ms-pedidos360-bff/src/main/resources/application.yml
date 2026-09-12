@@ -25,6 +25,8 @@ app:
     allowed-origins: "${ALLOWED_ORIGINS:http://localhost:4200}"
 
   clients:
+    audit:
+      base-url: "${AUDIT_SERVICE_URL:http://localhost:8085}"
     orders:
       base-url: "${ORDERS_SERVICE_URL:http://localhost:8081}"
     catalog:
