@@ -21,6 +21,9 @@ import org.testcontainers.utility.MountableFile;
 import cl.duoc.pedidos360.orders.messaging.NotificationOutbox;
 import cl.duoc.pedidos360.orders.messaging.OutboxPublisher;
 import cl.duoc.pedidos360.orders.messaging.RabbitEmailSender;
+import cl.duoc.pedidos360.orders.messaging.OrderEventOutbox;
+import cl.duoc.pedidos360.orders.messaging.KafkaEventSender;
+import cl.duoc.pedidos360.orders.messaging.KafkaOutboxPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -31,6 +34,7 @@ class OrdersPostgresIT extends OrdersApiContract {
     @Autowired OrdersService orders;
     @Autowired NotificationOutbox outbox;
     @Autowired PlatformTransactionManager manager;
+    @Autowired OrderEventOutbox eventOutbox;
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17.11-alpine")
             .withDatabaseName("postgres").withUsername("postgres").withPassword("test-admin-only")
@@ -71,6 +75,7 @@ class OrdersPostgresIT extends OrdersApiContract {
         }
         verify(catalog, times(1)).deduct(any(), anyString());
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
+        assertEquals(1, events(id).size());
     }
 
     @Test
@@ -101,11 +106,14 @@ class OrdersPostgresIT extends OrdersApiContract {
             var stored = repository.findLocked(id).orElseThrow();
             stored.complete(OrderStatus.CANCELADO);
             outbox.enqueue(stored, "rollback-test");
+            eventOutbox.enqueue(stored, OrderStatus.CREADO, "ana", "rollback-test");
             repository.flush();
             throw new IllegalStateException("rollback");
         }));
         assertEquals(OrderStatus.CREADO, repository.findById(id).orElseThrow().getStatus());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
+        assertTrue(events(id).isEmpty());
+        assertEquals(0, jdbc.queryForObject("SELECT event_version FROM purchase_orders WHERE id = ?", Long.class, id));
     }
 
     @Test
@@ -152,5 +160,67 @@ class OrdersPostgresIT extends OrdersApiContract {
             first.get(5, TimeUnit.SECONDS);
         }
         verify(sender, times(1)).send(anyString(), anyString());
+    }
+
+    @Test
+    void retriesKafkaWithoutSkippingEarlierEventsOrBlockingOtherOrders() throws Exception {
+        long first = order("ana", OrderStatus.CREADO).getId();
+        var operator = new CurrentUser("op", Set.of("ROLE_OPERADOR"));
+        orders.changeStatus(first, OrderStatus.ACEPTADO, operator, "kafka-retry");
+        orders.cancel(first, operator, "kafka-retry");
+        long other = order("bob", OrderStatus.CREADO).getId();
+        orders.cancel(other, operator, "kafka-other");
+        var sender = mock(KafkaEventSender.class);
+        doThrow(new IllegalStateException("broker offline")).doNothing().when(sender).send(eq(first), anyString());
+        var publisher = new KafkaOutboxPublisher(jdbc, sender, manager);
+        publisher.publishNext();
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT attempts FROM order_event_outbox WHERE order_id = ? AND aggregate_version = 1", Integer.class, first));
+        jdbc.update("UPDATE order_event_outbox SET next_attempt_at = CURRENT_TIMESTAMP + INTERVAL '1 hour' WHERE order_id = ? AND aggregate_version = 1", first);
+        publisher.publishNext();
+        verify(sender).send(eq(other), anyString());
+        verify(sender, times(1)).send(eq(first), anyString());
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM order_event_outbox WHERE order_id = ? AND published_at IS NULL", Integer.class, first));
+        jdbc.update("UPDATE order_event_outbox SET next_attempt_at = CURRENT_TIMESTAMP WHERE order_id = ?", first);
+        publisher.publishNext();
+        publisher.publishNext();
+        publisher.publishNext();
+        var payloads = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(sender, times(3)).send(eq(first), payloads.capture());
+        var recorded = payloads.getAllValues().stream().map(value -> json.readTree(value)).toList();
+        assertEquals(recorded.get(0).get("eventId"), recorded.get(1).get("eventId"));
+        assertEquals(1, recorded.get(1).get("aggregateVersion").asLong());
+        assertEquals(2, recorded.get(2).get("aggregateVersion").asLong());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM order_event_outbox WHERE published_at IS NULL", Integer.class));
+    }
+
+    @Test
+    void parallelKafkaPublishersCannotOvertakeTheSameOrder() throws Exception {
+        long id = order("ana", OrderStatus.CREADO).getId();
+        var operator = new CurrentUser("op", Set.of("ROLE_OPERADOR"));
+        orders.changeStatus(id, OrderStatus.ACEPTADO, operator, "kafka-race");
+        orders.cancel(id, operator, "kafka-race");
+        var sender = mock(KafkaEventSender.class);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(call -> {
+            entered.countDown();
+            assertTrue(release.await(10, TimeUnit.SECONDS));
+            return null;
+        }).when(sender).send(eq(id), anyString());
+        var publisher = new KafkaOutboxPublisher(jdbc, sender, manager);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(publisher::publishNext);
+            try {
+                assertTrue(entered.await(5, TimeUnit.SECONDS));
+                executor.submit(publisher::publishNext).get(5, TimeUnit.SECONDS);
+                verify(sender, times(1)).send(eq(id), anyString());
+            } finally { release.countDown(); }
+            first.get(5, TimeUnit.SECONDS);
+        }
+        publisher.publishNext();
+        verify(sender, times(2)).send(eq(id), anyString());
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM order_event_outbox WHERE published_at IS NOT NULL", Integer.class));
     }
 }

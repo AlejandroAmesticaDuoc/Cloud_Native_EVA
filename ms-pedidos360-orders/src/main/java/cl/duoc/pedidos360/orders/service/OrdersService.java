@@ -11,6 +11,7 @@ import cl.duoc.pedidos360.orders.exception.*;
 import cl.duoc.pedidos360.orders.repository.OrderRepository;
 import cl.duoc.pedidos360.orders.security.CurrentUser;
 import cl.duoc.pedidos360.orders.messaging.NotificationOutbox;
+import cl.duoc.pedidos360.orders.messaging.OrderEventOutbox;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -23,12 +24,14 @@ public class OrdersService {
     private final CatalogClient catalog;
     private final TransactionTemplate transactions;
     private final NotificationOutbox notifications;
+    private final OrderEventOutbox events;
 
     public OrdersService(OrderRepository repository, CatalogClient catalog, PlatformTransactionManager manager,
-            NotificationOutbox notifications) {
+            NotificationOutbox notifications, OrderEventOutbox events) {
         this.repository = repository;
         this.catalog = catalog;
         this.notifications = notifications;
+        this.events = events;
         transactions = new TransactionTemplate(manager);
         transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -64,7 +67,7 @@ public class OrdersService {
         }
         return transactions.execute(tx -> {
             PurchaseOrder order = repository.saveAndFlush(new PurchaseOrder(user.id(), items));
-            notifications.enqueue(order, traceId);
+            recordEvents(order, null, user, traceId);
             return response(order);
         });
     }
@@ -94,8 +97,9 @@ public class OrdersService {
                     || (target == OrderStatus.CANCELADO && order.getStatus() == OrderStatus.ACEPTADO);
             if (stockRequired) order.prepare(target);
             else {
+                OrderStatus previous = order.getStatus();
                 order.complete(target);
-                notifications.enqueue(order, traceId);
+                recordEvents(order, previous, user, traceId);
             }
             repository.flush();
             return new Prepared(response(order), stockRequired);
@@ -122,13 +126,19 @@ public class OrdersService {
                 repository.flush();
                 return new Outcome(response(order), true);
             }
+            OrderStatus previous = order.getStatus();
             order.complete(target);
-            notifications.enqueue(order, traceId);
+            recordEvents(order, previous, user, traceId);
             repository.flush();
             return new Outcome(response(order), false);
         }));
         if (outcome.rejected()) throw new OrderConflictException("Catalog rechazó el movimiento; revisa productos y stock");
         return outcome.response();
+    }
+
+    private void recordEvents(PurchaseOrder order, OrderStatus previous, CurrentUser user, String traceId) {
+        notifications.enqueue(order, traceId);
+        events.enqueue(order, previous, user.id(), traceId);
     }
 
     private void validateTransition(OrderStatus current, OrderStatus target) {

@@ -23,13 +23,14 @@ src/main/java/cl/duoc/pedidos360/orders/
   dto/          Solicitudes, respuestas y estados
   entity/       Pedido y detalle persistente
   exception/    Errores controlados
-  messaging/    Avisos persistentes y publicación a RabbitMQ
+  messaging/    Avisos y eventos persistentes, publicadores RabbitMQ y Kafka
   repository/   Consultas y bloqueo por pedido
   security/     Usuario autenticado y credencial de servicio
   service/      Reglas de negocio y coordinación del stock
 src/main/resources/db/migration/
   V1__create_orders.sql
   V2__notification_outbox.sql
+  V3__order_event_outbox.sql
 src/test/       API, JWT, OAuth2, HTTP y PostgreSQL real
 ```
 
@@ -56,6 +57,6 @@ Este script prueba BFF → Orders → Catalog con JWT firmados y bases temporale
 
 ## Límites de este bloque
 
-La creación de pedidos todavía no tiene clave de idempotencia: repetir POST puede crear otro pedido. Orders guarda avisos en una tabla outbox y puede publicarlos en RabbitMQ; ver [Notify](../docs/NOTIFY_RABBITMQ.md). La recuperación de movimientos de stock pendientes se activa al reintentar la misma acción; no existe un proceso automático de reconciliación de stock. Cobros, Kafka, Audit y Report siguen fuera de este bloque.
+La creación de pedidos todavía no tiene clave de idempotencia: repetir POST puede crear otro pedido. Orders guarda avisos y eventos en tablas outbox para publicarlos en RabbitMQ y Kafka; ver [Notify](../docs/NOTIFY_RABBITMQ.md) y [Eventos](../docs/KAFKA_EVENTOS.md). La recuperación de movimientos de stock pendientes se activa al reintentar la misma acción; no existe un proceso automático de reconciliación de stock. Cobros, Audit y Report siguen fuera de este bloque.
 
 La configuración y prueba real de Entra y el despliegue AWS siguen pendientes. No exponer Orders, Catalog ni sus bases directamente a Internet.

@@ -33,6 +33,8 @@ public class PurchaseOrder {
     @Version
     @Column(nullable = false)
     private long version;
+    @Column(nullable = false)
+    private long eventVersion;
 
     protected PurchaseOrder() {}
 
@@ -52,6 +54,7 @@ public class PurchaseOrder {
     public Instant getCreatedAt() { return createdAt; }
     public BigDecimal getTotal() { return total; }
     public List<OrderItem> getItems() { return Collections.unmodifiableList(items); }
+    public long nextEventVersion() { return ++eventVersion; }
     public void prepare(OrderStatus target) { pendingStatus = target; }
     public void clearPending() { pendingStatus = null; }
     public void complete(OrderStatus target) {

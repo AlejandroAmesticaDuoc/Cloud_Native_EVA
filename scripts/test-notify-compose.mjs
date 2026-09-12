@@ -6,6 +6,7 @@ import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
+import { createServer } from 'node:net';
 
 const execute = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -14,6 +15,7 @@ const docker = [process.env.DOCKER_CLI_PATH,
   process.env.ProgramFiles && join(process.env.ProgramFiles, 'Docker', 'Docker', 'resources', 'bin', 'docker.exe')]
   .find(path => path && existsSync(path)) || 'docker';
 const project = `p360-notify-test-${randomUUID()}`;
+const withKafka = process.argv.includes('--kafka');
 const environment = { ...process.env,
   POSTGRES_ADMIN_PASSWORD: randomBytes(24).toString('hex'), CATALOG_DB_PASSWORD: randomBytes(24).toString('hex'),
   ORDERS_DB_PASSWORD: randomBytes(24).toString('hex'), RABBITMQ_USERNAME: 'compose-test',
@@ -26,12 +28,21 @@ const environment = { ...process.env,
 };
 for (const key of ['POSTGRES_PORT', 'ORDERS_POSTGRES_PORT', 'BFF_PORT', 'CATALOG_PORT', 'ORDERS_PORT',
   'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT']) environment[key] = '0';
+if (withKafka) {
+  const probe = createServer();
+  await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
+  environment.KAFKA_PORT = String(probe.address().port);
+  await new Promise(resolve => probe.close(resolve));
+  delete environment.KAFKA_CLUSTER_ID;
+  environment.KAFKA_ORDERS_TOPIC = 'orders.events';
+}
 if (docker !== 'docker') {
   const pathKey = Object.keys(environment).find(key => key.toLowerCase() === 'path') || 'PATH';
   environment[pathKey] = dirname(docker) + delimiter + (environment[pathKey] || '');
 }
 const compose = ['compose', '--env-file', '.env.example', '-p', project,
   '-f', 'compose.postgres.yml', '-f', 'compose.catalog.yml', '-f', 'compose.orders.yml', '-f', 'compose.notify.yml'];
+if (withKafka) compose.push('-f', 'compose.kafka.yml');
 
 async function run(args, timeout = 120000) {
   const result = await execute(docker, args, {
@@ -58,12 +69,13 @@ async function ready(service, port) {
 try {
   console.log('Validando Compose y construyendo las imágenes de Orders y Notify...');
   const configuration = JSON.parse(await run([...compose, 'config', '--format', 'json']));
-  assert.equal(Object.keys(configuration.services).length, 8);
+  assert.equal(Object.keys(configuration.services).length, withKafka ? 10 : 8);
   for (const service of Object.values(configuration.services)) {
     for (const port of service.ports || []) assert.equal(port.host_ip, '127.0.0.1');
   }
   assert.equal(configuration.services.notify.environment.SMTP_HOST, 'mailpit');
   assert.equal(configuration.services.orders.environment.ORDERS_NOTIFICATIONS_ENABLED, 'true');
+  if (withKafka) assert.match(configuration.services.kafka.environment.CLUSTER_ID, /^[A-Za-z0-9_-]{22}$/);
   await run([...compose, 'up', '-d', '--build'], 600000);
   console.log('Comprobando salud y ejecución sin root de los cuatro servicios Java...');
   for (const [service, port] of [['bff', 8080], ['catalog', 8082], ['orders', 8081], ['notify', 8083]]) {
@@ -73,7 +85,19 @@ try {
     assert.equal(await run(['exec', id, 'id', '-u']), '10001');
     console.log(`${service}: UP, usuario 10001`);
   }
-  console.log('SUCCESS: ocho contenedores y cuatro servicios Java verificados en Docker Compose.');
+  if (withKafka) {
+    const id = await run([...compose, 'ps', '-q', 'kafka']);
+    assert.match(id, /^[a-f0-9]{64}$/);
+    const topic = await run(['exec', id, '/opt/kafka/bin/kafka-topics.sh',
+      '--bootstrap-server', 'kafka:19092', '--describe', '--topic', 'orders.events']);
+    assert.match(topic, /PartitionCount:\s*3/);
+    assert.equal(configuration.services.orders.environment.KAFKA_BOOTSTRAP_SERVERS, 'kafka:19092');
+    const initializer = await run([...compose, 'ps', '-a', '-q', 'kafka-init']);
+    assert.match(initializer, /^[a-f0-9]{64}$/);
+    assert.equal(await run(['inspect', '--format', '{{.State.ExitCode}}', initializer]), '0');
+    console.log('Kafka: tópico orders.events creado con tres particiones.');
+  }
+  console.log(`SUCCESS: ${withKafka ? 'nueve contenedores activos y un inicializador' : 'ocho contenedores'}; cuatro servicios Java verificados en Docker Compose.`);
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

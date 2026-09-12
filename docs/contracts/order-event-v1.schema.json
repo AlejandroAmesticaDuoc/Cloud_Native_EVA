@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pedidos360 OrderEvent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "eventId", "eventType", "orderId", "aggregateVersion", "occurredAt", "traceId", "actorId", "customerId", "previousStatus", "status", "createdAt", "total"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "enum": ["OrderCreated", "OrderAccepted", "OrderStatusChanged", "OrderCancelled"] },
+    "orderId": { "type": "integer", "minimum": 1 },
+    "aggregateVersion": { "type": "integer", "minimum": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "traceId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,100}$" },
+    "actorId": { "type": "string", "minLength": 1 },
+    "customerId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "previousStatus": { "enum": [null, "CREADO", "ACEPTADO", "EN_PREPARACION", "DESPACHADO", "ENTREGADO", "CANCELADO"] },
+    "status": { "enum": ["CREADO", "ACEPTADO", "EN_PREPARACION", "DESPACHADO", "ENTREGADO", "CANCELADO"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "total": { "type": "number", "exclusiveMinimum": 0, "multipleOf": 0.01 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "eventType": { "const": "OrderCreated" } } },
+      "then": { "properties": { "status": { "const": "CREADO" }, "previousStatus": { "const": null }, "aggregateVersion": { "const": 1 } } },
+      "else": { "properties": { "previousStatus": { "type": "string" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "OrderAccepted" } } },
+      "then": { "properties": { "status": { "const": "ACEPTADO" }, "previousStatus": { "const": "CREADO" } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "OrderCancelled" } } },
+      "then": { "properties": { "status": { "const": "CANCELADO" }, "previousStatus": { "enum": ["CREADO", "ACEPTADO"] } } }
+    },
+    {
+      "if": { "properties": { "eventType": { "const": "OrderStatusChanged" } } },
+      "then": { "oneOf": [
+        { "properties": { "previousStatus": { "const": "ACEPTADO" }, "status": { "const": "EN_PREPARACION" } } },
+        { "properties": { "previousStatus": { "const": "EN_PREPARACION" }, "status": { "const": "DESPACHADO" } } },
+        { "properties": { "previousStatus": { "const": "DESPACHADO" }, "status": { "const": "ENTREGADO" } } }
+      ] }
+    }
+  ]
+}

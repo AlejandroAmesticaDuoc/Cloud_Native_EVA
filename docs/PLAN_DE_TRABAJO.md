@@ -220,7 +220,7 @@ feat/services-aws-integration
 
 ### Alcance básico de mensajería
 
-RabbitMQ y Kafka se trabajan después del flujo principal de seguridad. Estado actual: RabbitMQ y Notify ya están implementados para pruebas locales; Kafka sigue pendiente. El alcance y las instrucciones de notificaciones están en [Notify y RabbitMQ](NOTIFY_RABBITMQ.md).
+RabbitMQ y Kafka se trabajan después del flujo principal de seguridad. Estado actual: RabbitMQ, Notify y la publicación de eventos Kafka ya están implementados para pruebas locales. Audit y Report son los siguientes servicios. Ver [Notify y RabbitMQ](NOTIFY_RABBITMQ.md) y [Kafka y eventos](KAFKA_EVENTOS.md).
 
 Inicialmente se considera:
 

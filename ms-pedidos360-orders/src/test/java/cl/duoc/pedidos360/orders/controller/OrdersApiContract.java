@@ -14,6 +14,8 @@ import cl.duoc.pedidos360.orders.dto.*;
 import cl.duoc.pedidos360.orders.entity.*;
 import cl.duoc.pedidos360.orders.exception.*;
 import cl.duoc.pedidos360.orders.repository.OrderRepository;
+import cl.duoc.pedidos360.orders.messaging.OrderEvent;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
@@ -29,6 +31,7 @@ public abstract class OrdersApiContract {
     @Autowired protected MockMvc mvc;
     @Autowired protected OrderRepository repository;
     @Autowired protected JdbcTemplate jdbc;
+    @Autowired protected JsonMapper json;
     @MockitoBean protected CatalogClient catalog;
 
     @BeforeEach
@@ -54,6 +57,72 @@ public abstract class OrdersApiContract {
         var order = new PurchaseOrder(owner, List.of(new OrderItem(10L, 2, new BigDecimal("1200.50"))));
         order.complete(state);
         return repository.saveAndFlush(order);
+    }
+
+    protected List<OrderEvent> events(long orderId) {
+        return jdbc.query("SELECT payload FROM order_event_outbox WHERE order_id = ? ORDER BY aggregate_version",
+                (row, number) -> json.readValue(row.getString(1), OrderEvent.class), orderId);
+    }
+
+    @Test
+    void recordsCreationEventWithAuthenticatedActorAndStableSnapshot() throws Exception {
+        var result = mvc.perform(post("/api/v1/orders").with(user("ana", "CLIENTE"))
+                .header("X-Trace-Id", "creation-event").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"customerId\":\"ana\",\"items\":[{\"productId\":10,\"quantity\":2}]}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.eventVersion").doesNotExist()).andReturn();
+        long id = json.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+        var event = events(id).getFirst();
+        assertEquals(OrderEvent.EventType.OrderCreated, event.eventType());
+        assertEquals(1, event.schemaVersion());
+        assertEquals(1, event.aggregateVersion());
+        assertEquals("ana", event.actorId());
+        assertEquals("ana", event.customerId());
+        assertEquals("creation-event", event.traceId());
+        assertNull(event.previousStatus());
+        assertEquals(OrderStatus.CREADO, event.status());
+        assertEquals(0, new BigDecimal("2401.00").compareTo(event.total()));
+        assertNotNull(event.createdAt());
+        assertNotNull(event.eventId());
+        assertFalse(json.writeValueAsString(event).contains("Bearer"));
+        assertEquals(1, jdbc.queryForObject("SELECT event_version FROM purchase_orders WHERE id = ?", Long.class, id));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"CREADO,ACEPTADO,OrderAccepted", "ACEPTADO,EN_PREPARACION,OrderStatusChanged",
+        "EN_PREPARACION,DESPACHADO,OrderStatusChanged", "DESPACHADO,ENTREGADO,OrderStatusChanged",
+        "CREADO,CANCELADO,OrderCancelled", "ACEPTADO,CANCELADO,OrderCancelled"})
+    void recordsOneEventForEachActualTransition(OrderStatus previous, OrderStatus target, OrderEvent.EventType type)
+            throws Exception {
+        long id = order("ana", previous).getId();
+        for (int attempt = 0; attempt < 2; attempt++) {
+            mvc.perform(patch("/api/v1/orders/" + id + "/status").with(user("operador", "OPERADOR"))
+                    .header("X-Trace-Id", "transition-event").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"status\":\"" + target + "\"}")).andExpect(status().isOk());
+        }
+        var recorded = events(id);
+        assertEquals(1, recorded.size());
+        assertEquals(type, recorded.getFirst().eventType());
+        assertEquals(previous, recorded.getFirst().previousStatus());
+        assertEquals(target, recorded.getFirst().status());
+        assertEquals("operador", recorded.getFirst().actorId());
+        assertEquals("ana", recorded.getFirst().customerId());
+        assertEquals("transition-event", recorded.getFirst().traceId());
+    }
+
+    @Test
+    void versionsAreSequentialAndPreviousSnapshotsDoNotChange() throws Exception {
+        long id = order("ana", OrderStatus.CREADO).getId();
+        mvc.perform(patch("/api/v1/orders/" + id + "/status").with(user("op", "OPERADOR"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ACEPTADO\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/orders/" + id + "/cancel").with(user("ana", "CLIENTE")))
+                .andExpect(status().isNoContent());
+        var recorded = events(id);
+        assertEquals(List.of(1L, 2L), recorded.stream().map(OrderEvent::aggregateVersion).toList());
+        assertEquals(OrderStatus.ACEPTADO, recorded.getFirst().status());
+        assertEquals(OrderStatus.CANCELADO, recorded.getLast().status());
+        assertEquals("ana", recorded.getLast().actorId());
+        assertNotEquals(recorded.getFirst().eventId(), recorded.getLast().eventId());
     }
 
     @Test
@@ -282,6 +351,7 @@ public abstract class OrdersApiContract {
         assertEquals(OrderStatus.CREADO, stored.getStatus());
         assertNull(stored.getPendingStatus());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
+        assertTrue(events(id).isEmpty());
         mvc.perform(post("/api/v1/orders/" + id + "/cancel").with(user("ana", "CLIENTE"))).andExpect(status().isNoContent());
     }
 
@@ -295,6 +365,7 @@ public abstract class OrdersApiContract {
         assertEquals(OrderStatus.CREADO, stored.getStatus());
         assertEquals(OrderStatus.ACEPTADO, stored.getPendingStatus());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
+        assertTrue(events(id).isEmpty());
         mvc.perform(post("/api/v1/orders/" + id + "/cancel").with(user("ana", "CLIENTE"))).andExpect(status().isConflict());
         mvc.perform(patch("/api/v1/orders/" + id + "/status").with(user("op", "OPERADOR"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ACEPTADO\"}"))
