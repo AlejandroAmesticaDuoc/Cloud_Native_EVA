@@ -1,8 +1,9 @@
 package cl.duoc.pedidos360.bff.security;
 
+import cl.duoc.pedidos360.bff.config.TraceIdFilter;
+
 import java.io.IOException;
 import java.time.Instant;
-import java.util.UUID;
 
 import cl.duoc.pedidos360.bff.dto.common.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -64,12 +65,6 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
     }
 
     private String resolveTraceId(HttpServletRequest request) {
-        String traceId = request.getHeader(TRACE_ID_HEADER);
-
-        if (traceId == null || traceId.isBlank()) {
-            return UUID.randomUUID().toString();
-        }
-
-        return traceId;
+        return TraceIdFilter.resolve(request);
     }
 }

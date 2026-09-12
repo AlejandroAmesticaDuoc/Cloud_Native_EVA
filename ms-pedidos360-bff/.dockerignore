@@ -1,0 +1,11 @@
+target
+.git
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks
+.vscode
+secrets
+src/test
