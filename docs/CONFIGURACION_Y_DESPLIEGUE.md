@@ -118,7 +118,9 @@ El login de Entra puede utilizarse desde localhost siempre que la URL esté regi
 
 ## Docker Compose
 
-Por ahora `compose.postgres.yml` levanta solamente la base local. El Compose completo de aplicaciones es un trabajo pendiente de infraestructura y se utilizará para levantar:
+`compose.postgres.yml` levanta la base local. Combinándolo con `compose.catalog.yml` se ejecutan PostgreSQL, Catalog y BFF en una misma red de desarrollo. La preparación y los comandos están en [Catalog completo](CATALOG_COMPLETO.md).
+
+El despliegue completo sigue pendiente de infraestructura. La solución planificada incluye:
 
 - BFF.
 - Orders.
@@ -135,13 +137,13 @@ Las URLs internas utilizarán el nombre del servicio Docker.
 Ejemplo:
 
 ```text
-http://orders-service:8081
-http://catalog-service:8082
+http://orders:8081
+http://catalog:8082
 ```
 
 No se deben escribir direcciones IP fijas en el código.
 
-Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; una aplicación en la misma red Docker usaría `postgres:5432`. Los dos Compose no comparten red automáticamente: infraestructura debe integrar las redes antes de usar ese nombre.
+Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; una aplicación en la misma red Docker usa `postgres:5432`. Los archivos locales deben combinarse en un solo comando con ambos argumentos `-f`, no iniciarse como proyectos separados. Orders todavía no está incluido, por lo que sus rutas no funcionarán en este Compose parcial.
 
 ## Despliegue AWS
 

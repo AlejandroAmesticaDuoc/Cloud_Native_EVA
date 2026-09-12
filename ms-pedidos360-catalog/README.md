@@ -2,34 +2,45 @@
 
 Microservicio de catálogo de productos. Utiliza Spring Boot 4.1.1, Java 21 como objetivo de compilación, Spring Data JPA y PostgreSQL.
 
-## Estado de este bloque
+## Estado actual
 
 Implementado:
 
 - DTO compatibles con el contrato del BFF y validaciones de entrada.
 - Endpoint de salud en el puerto 8082.
 - Configuración de conexión PostgreSQL mediante variables de entorno.
-- Migración Flyway para la tabla `products`.
+- Migraciones Flyway para productos y descuentos de stock por pedido.
 - Entidad `Product` y repositorio `ProductRepository`.
 - Consultas de productos activos, desactivación lógica y versión para detectar actualizaciones concurrentes.
 - Pruebas rápidas con H2 y contrato de integración con PostgreSQL real mediante Testcontainers.
+- CRUD completo, stock transaccional e idempotente por pedido y errores controlados.
+- JWT con firma, issuer, audience, expiración obligatoria, scope y roles.
+- `X-Trace-Id`, OpenAPI opcional y Dockerfile con Java 21, sin ejecutar como root.
 
-Pendiente: controladores CRUD, capa de servicio, manejo de errores, seguridad e integración HTTP real con el BFF y Orders. No publicar este microservicio en Internet mientras se implementa ese trabajo.
+La integración local BFF → Catalog → PostgreSQL está probada. Queda pendiente que Orders implemente su parte del flujo de pedidos, además de la validación con frontend, Entra real y AWS. Catalog y PostgreSQL deben mantenerse en una red privada en el despliegue.
 
 ## Estructura
 
 ```text
 src/main/java/cl/duoc/pedidos360/catalog/
+  config/               Seguridad, OpenAPI y trazabilidad
+  controller/           API pública y stock interno
   dto/                  Contrato de entrada y salida
-  entity/Product.java   Mapeo de la tabla de productos
-  repository/           Consultas JPA
+  entity/               Productos y descuentos por pedido
+  exception/            Errores controlados
+  repository/           Consultas JPA y bloqueos de filas
+  security/             Respuestas 401 y 403
+  service/              Reglas de catálogo y stock
 src/main/resources/
   application.properties
   db/migration/V1__create_products.sql
+  db/migration/V2__create_stock_deductions.sql
 src/test/java/cl/duoc/pedidos360/catalog/
-  config/               Pruebas de salud
+  config/               Salud y OpenAPI
+  controller/           API, transacciones y concurrencia
   dto/                  Pruebas de validación
   repository/           Contrato de persistencia en H2 y PostgreSQL
+  security/             Validación real de JWT firmados
 src/test/resources/
   application-test.properties
 ```
@@ -38,14 +49,22 @@ src/test/resources/
 
 Seguir primero la [guía de PostgreSQL local](../docs/POSTGRESQL_LOCAL.md). Allí se explica cómo iniciar Docker, definir las contraseñas y levantar la base.
 
+El [contrato de Catalog](../docs/CATALOG_COMPLETO.md) explica rutas, permisos, Postman y ejecución conjunta con el BFF.
+
 Catalog necesita estas variables en la misma terminal donde se inicia Maven:
 
 | Variable | Valor predeterminado / uso |
 |---|---|
 | `CATALOG_PORT` | `8082` |
+| `CATALOG_BIND_ADDRESS` | `127.0.0.1`; Docker usa `0.0.0.0` dentro del contenedor |
 | `CATALOG_DB_URL` | `jdbc:postgresql://localhost:5432/pedidos360_catalog` |
 | `CATALOG_DB_USERNAME` | `pedidos360_catalog` |
 | `CATALOG_DB_PASSWORD` | Obligatoria, sin valor predeterminado |
+| `JWT_ISSUER_URI` | Emisor del tenant, igual que en el BFF |
+| `JWT_AUDIENCE` | Audiencia de la API, igual que en el BFF |
+| `API_DOCS_ENABLED` | `false` por defecto |
+
+Configurar los valores JWT reales antes de usar la API. Los predeterminados son referencias para arrancar, no una configuración de identidad utilizable. No existe un modo de desarrollo que permita saltarse la seguridad.
 
 ```powershell
 Set-Location -LiteralPath 'D:\Cloud_Native_EVA\ms-pedidos360-catalog'
@@ -67,19 +86,27 @@ Flyway es el único encargado de crear y modificar tablas. Hibernate tiene `ddl-
 
 ## Pruebas
 
-Rápidas, sin Docker:
+62 pruebas rápidas, sin Docker:
 
 ```powershell
 .\mvnw.cmd clean test
 ```
 
-Integración adicional con PostgreSQL temporal, requiere Docker:
+Las 62 anteriores y 44 adicionales con PostgreSQL temporal, requiere Docker:
 
 ```powershell
 .\mvnw.cmd clean verify -Ppostgres-it
 ```
 
 H2 está limitado a dependencias y recursos de test; no reemplaza PostgreSQL en la aplicación ni se incluye en el JAR final. La validación definitiva de compatibilidad con PostgreSQL es la segunda ejecución.
+
+Para comprobar ambos servicios ejecutándose de verdad, compilar también el BFF con `clean verify` y ejecutar desde la raíz:
+
+```powershell
+node scripts/test-bff-catalog.mjs
+```
+
+Requiere Node 22+, Java y Docker. Realiza 26 comprobaciones con una base y un emisor de JWT temporales. No modifica datos de desarrollo ni sustituye la prueba final con Entra.
 
 ## Coordinación con el equipo
 

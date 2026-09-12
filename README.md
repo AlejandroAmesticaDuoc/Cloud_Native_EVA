@@ -148,14 +148,15 @@ La autorización será aplicada tanto en el frontend como en el backend. La vali
 - [Configuración y despliegue](docs/CONFIGURACION_Y_DESPLIEGUE.md)
 - [Preparar PostgreSQL local](docs/POSTGRESQL_LOCAL.md)
 - [Estado y ejecución de Catalog](ms-pedidos360-catalog/README.md)
+- [Contrato de Catalog, stock interno y pruebas con el BFF](docs/CATALOG_COMPLETO.md)
 
 ## Cambio de base de datos y estado actual
 
 Se decidió utilizar PostgreSQL por los problemas para habilitar la cuenta del proveedor anterior. Este cambio debe informarse al docente; no se da por aprobada una excepción a la pauta.
 
-Catalog cuenta con DTO, validaciones, salud, configuración PostgreSQL, migración SQL y repositorio JPA. Sus controladores y reglas de negocio todavía están pendientes. Orders, Notify, Report y Audit siguen siendo parte del trabajo planificado.
+Catalog cuenta con CRUD completo, validaciones, JWT y roles, salud, PostgreSQL, migraciones y stock transaccional por pedido. Se verificó la integración HTTP BFF → Catalog → PostgreSQL. Orders, Notify, Report y Audit siguen siendo parte del trabajo planificado; también falta comprobar el flujo con frontend, Entra real y AWS.
 
-El archivo `compose.postgres.yml` inicia solamente PostgreSQL local; no despliega toda la solución. Las pruebas rápidas de Catalog usan H2 solo dentro de los tests y las pruebas de integración usan PostgreSQL real con Docker.
+El archivo `compose.postgres.yml` inicia PostgreSQL local. Al combinarlo con `compose.catalog.yml`, también inicia Catalog y el BFF; no incluye los demás servicios ni despliega en AWS. Las pruebas rápidas de Catalog usan H2 solo dentro de los tests y las pruebas de integración usan PostgreSQL real con Docker.
 
 El proyecto activo está en la raíz. La carpeta `CloudNative` conserva una copia antigua del trabajo del equipo, no es una segunda configuración vigente y no debe usarse para ejecutar estos pasos.
 

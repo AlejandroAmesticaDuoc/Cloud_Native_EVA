@@ -1,0 +1,33 @@
+# Complemento local: usar junto a compose.postgres.yml, nunca en reemplazo.
+services:
+  catalog:
+    build: ./ms-pedidos360-catalog
+    environment:
+      CATALOG_PORT: 8082
+      CATALOG_DB_URL: jdbc:postgresql://postgres:5432/pedidos360_catalog
+      CATALOG_DB_USERNAME: pedidos360_catalog
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?Define CATALOG_DB_PASSWORD}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define el emisor real de Entra ID}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define la audiencia real de la API}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+    ports:
+      - "127.0.0.1:${CATALOG_PORT:-8082}:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  bff:
+    build: ./ms-pedidos360-bff
+    environment:
+      BFF_PORT: 8080
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define el emisor real de Entra ID}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define la audiencia real de la API}
+      CATALOG_SERVICE_URL: http://catalog:8082
+      ORDERS_SERVICE_URL: http://orders:8081
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:4200}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+    ports:
+      - "127.0.0.1:${BFF_PORT:-8080}:8080"
+    depends_on:
+      catalog:
+        condition: service_started

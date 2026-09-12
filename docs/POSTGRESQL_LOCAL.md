@@ -2,7 +2,7 @@
 
 ## Objetivo de este paso
 
-Vamos a ejecutar PostgreSQL en nuestro computador para desarrollar sin depender de una cuenta cloud. Por ahora prepararemos la persistencia de Catalog. Las bases y usuarios de los demás microservicios se crearán en sus próximos pasos.
+Vamos a ejecutar PostgreSQL en nuestro computador para desarrollar sin depender de una cuenta cloud. Catalog ya incluye CRUD, seguridad y operaciones internas de stock. Las bases y usuarios de los demás microservicios se crearán en sus próximos pasos.
 
 Este cambio no modifica las rutas ni los DTO que consume el BFF. El cambio de motor debe informarse al docente; no estamos dando por aprobada una modificación de la pauta.
 
@@ -11,7 +11,8 @@ Este cambio no modifica las rutas ni los DTO que consume el BFF. El cambio de mo
 - VS Code y GitHub Desktop, que ya utilizamos.
 - Java compatible con el proyecto, que compila para Java 21.
 - Docker Desktop con el motor iniciado y usando contenedores Linux.
-- Postman para revisar la salud de Catalog.
+- Postman para probar salud, CRUD y permisos.
+- Node 22 o superior, solo para el script de integración completa.
 
 No necesitamos XAMPP, una instalación local de PostgreSQL ni una cuenta de un proveedor cloud para este paso. Un cliente gráfico SQL es opcional; también podemos usar `psql` dentro del contenedor.
 
@@ -25,6 +26,12 @@ docker compose version
 ```
 
 `docker version` debe mostrar información del cliente y del servidor. Si el comando no existe o no logra conectarse al motor, primero hay que resolver Docker Desktop.
+
+Si Docker se instaló por usuario y una terminal antigua no encuentra el comando o `docker-credential-desktop`, abrir una terminal nueva. Como alternativa temporal, después de comprobar que existe esa carpeta:
+
+```powershell
+$env:PATH = "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin;" + $env:PATH
+```
 
 ## 1. Definir las credenciales locales
 
@@ -86,14 +93,23 @@ docker compose -f compose.postgres.yml up -d --wait
 
 ## 3. Ejecutar Catalog
 
-Conservar la misma terminal para no perder las variables:
+Conservar la misma terminal para no perder las variables. Para utilizar los endpoints protegidos, configurar los mismos valores reales que utiliza el BFF; reemplazar los marcadores antes de ejecutar:
+
+```powershell
+$env:JWT_ISSUER_URI = 'https://login.microsoftonline.com/<tenant-id>/v2.0'
+$env:JWT_AUDIENCE = '<api-client-id>'
+```
+
+Para comprobar salud no se necesita un token. Si aún no está listo Entra, usar las pruebas aisladas del apartado siguiente para verificar la integración sin desactivar la seguridad.
+
+Iniciar Catalog:
 
 ```powershell
 Set-Location -LiteralPath 'D:\Cloud_Native_EVA\ms-pedidos360-catalog'
 .\mvnw.cmd spring-boot:run
 ```
 
-Al iniciar, Flyway ejecuta `V1__create_products.sql`. Después Hibernate verifica que la tabla coincida con la entidad. En los siguientes arranques Flyway no vuelve a crear la tabla ni borra productos.
+Al iniciar, Flyway ejecuta las migraciones pendientes: `V1` crea productos y `V2` registra descuentos de stock por pedido. Después Hibernate valida el esquema. En los siguientes arranques Flyway no vuelve a crear las tablas ni borra productos.
 
 En Postman comprobar:
 
@@ -106,7 +122,7 @@ Ambas respuestas deben indicar `UP`. Readiness incluye la conexión a la base. L
 
 Si falta la contraseña, PostgreSQL no está disponible o falla la migración, el arranque no se debe considerar exitoso. No hay un reemplazo automático por una base en memoria en la ejecución normal.
 
-Este bloque todavía NO incorpora los endpoints CRUD de Catalog. Es normal que `/api/v1/catalog` aún no esté implementado en este microservicio, aunque el BFF ya tenga su cliente HTTP.
+El CRUD está disponible en `/api/v1/catalog`. Sin JWT responde `401`; un JWT válido sin los permisos necesarios recibe `403`. Revisar el [contrato y la colección Postman](CATALOG_COMPLETO.md) para probarlo a través del BFF.
 
 ## 4. Consultar la tabla
 
@@ -134,7 +150,7 @@ Desde la carpeta de Catalog:
 .\mvnw.cmd clean test
 ```
 
-Estas pruebas no necesitan Docker ni contraseñas. Utilizan H2 exclusivamente en el classpath de test, ejecutan la misma migración SQL y verifican la entidad, las consultas del repositorio y las restricciones. H2 no demuestra por sí solo compatibilidad con PostgreSQL.
+Estas 62 pruebas no necesitan Docker ni contraseñas. Verifican API, validaciones, JWT, OpenAPI y persistencia. H2 se utiliza exclusivamente en el classpath de test, con las mismas migraciones SQL; no demuestra por sí solo compatibilidad con PostgreSQL.
 
 Con Docker Desktop iniciado, ejecutar también:
 
@@ -142,9 +158,24 @@ Con Docker Desktop iniciado, ejecutar también:
 .\mvnw.cmd clean verify -Ppostgres-it
 ```
 
-El perfil agrega las pruebas `ProductPostgresIT`. Testcontainers levanta un PostgreSQL temporal, sin utilizar la base de desarrollo, y lo elimina al finalizar. Ejecuta el mismo contrato de persistencia, además de comprobar el usuario y la base creados por el script de inicialización. Si Docker no está disponible, la integración falla en vez de omitirse silenciosamente.
+El perfil agrega 44 pruebas de `ProductPostgresIT` y `CatalogPostgresApiIT`. Testcontainers levanta PostgreSQL temporal, sin utilizar la base de desarrollo, y lo elimina al finalizar. Verifica persistencia, permisos SQL, CRUD, rollback e idempotencia ante solicitudes concurrentes. Si Docker no está disponible, la integración falla en vez de omitirse silenciosamente.
 
 El perfil Maven `postgres-it` no es un perfil de ejecución de Spring. No hay que usarlo en `spring-boot:run`.
+
+### Integración HTTP con el BFF
+
+Compilar ambos JAR y ejecutar el script desde la raíz, con Docker iniciado:
+
+```powershell
+Set-Location -LiteralPath 'D:\Cloud_Native_EVA\ms-pedidos360-bff'
+.\mvnw.cmd clean verify
+Set-Location -LiteralPath 'D:\Cloud_Native_EVA\ms-pedidos360-catalog'
+.\mvnw.cmd clean verify -Ppostgres-it
+Set-Location -LiteralPath 'D:\Cloud_Native_EVA'
+node scripts/test-bff-catalog.mjs
+```
+
+El script inicia ambos JAR en puertos libres, una base PostgreSQL temporal y un emisor local de JWT firmado. Comprueba 26 casos, incluyendo permisos, stock, persistencia y la respuesta `502` cuando Catalog se detiene. Al terminar retira sus procesos y su base temporal; no mantiene los servicios levantados ni modifica tus datos. No publica tokens ni guarda credenciales. Esto no sustituye la prueba final con usuarios reales de Entra.
 
 ## Datos y contraseñas
 
@@ -153,7 +184,7 @@ El perfil Maven `postgres-it` no es un perfil de ejecución de Spring. No hay qu
 - Cambiar `CATALOG_DB_PASSWORD` o el script después del primer arranque NO modifica usuarios existentes.
 - Ante un error de inicialización, revisar los logs antes de reintentar. No borrar el volumen como solución automática.
 - No utilizar `down -v`, `docker volume rm` ni operaciones de limpieza que eliminen el volumen si hay datos que conservar.
-- Cuando una migración ya fue aplicada, agregar `V2__...sql` para el siguiente cambio. No modificar `V1` sobre una base que ya la ejecutó.
+- Cuando una migración ya fue aplicada, agregar una nueva versión. El siguiente cambio será `V3__...sql`; no modificar `V1` ni `V2` sobre una base que ya las ejecutó.
 
 Para detener solamente esta base sin borrar datos:
 

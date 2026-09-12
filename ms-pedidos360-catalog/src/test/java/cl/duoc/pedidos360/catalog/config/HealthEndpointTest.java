@@ -51,7 +51,7 @@ class HealthEndpointTest {
 
         for (String path : paths) {
             mockMvc.perform(get(path))
-                    .andExpect(status().isNotFound());
+                    .andExpect(status().isUnauthorized());
         }
     }
 }
