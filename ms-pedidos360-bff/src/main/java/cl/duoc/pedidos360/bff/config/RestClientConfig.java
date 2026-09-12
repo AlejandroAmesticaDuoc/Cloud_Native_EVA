@@ -41,6 +41,13 @@ public class RestClientConfig {
         );
     }
 
+    @Bean
+    public RestClient auditRestClient(RestClient.Builder builder,
+            DownstreamRequestInterceptor interceptor,
+            @Value("${app.clients.audit.base-url}") URI baseUrl) {
+        return buildClient(builder, interceptor, baseUrl);
+    }
+
     private RestClient buildClient(
             RestClient.Builder builder,
             DownstreamRequestInterceptor interceptor,

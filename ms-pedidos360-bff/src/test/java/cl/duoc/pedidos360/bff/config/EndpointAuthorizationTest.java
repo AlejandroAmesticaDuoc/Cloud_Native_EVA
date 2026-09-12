@@ -51,6 +51,9 @@ class EndpointAuthorizationTest {
     @MockitoBean
     private CatalogService catalogService;
 
+    @MockitoBean
+    private cl.duoc.pedidos360.bff.service.AuditService auditService;
+
     @Test
     void shouldApplyClienteOrderPermissions()
             throws Exception {
@@ -337,12 +340,5 @@ class EndpointAuthorizationTest {
             return "ok";
         }
 
-        @GetMapping({
-                "/api/v1/audit",
-                "/api/v1/audit/orders/{orderId}"
-        })
-        String getAudit() {
-            return "ok";
-        }
     }
 }
