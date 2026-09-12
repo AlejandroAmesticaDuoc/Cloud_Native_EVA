@@ -17,7 +17,7 @@ Implementado:
 - JWT con firma, issuer, audience, expiración obligatoria, scope y roles.
 - `X-Trace-Id`, OpenAPI opcional y Dockerfile con Java 21, sin ejecutar como root.
 
-La integración local BFF → Catalog → PostgreSQL está probada. Queda pendiente que Orders implemente su parte del flujo de pedidos, además de la validación con frontend, Entra real y AWS. Catalog y PostgreSQL deben mantenerse en una red privada en el despliegue.
+La integración local BFF → Orders → Catalog → PostgreSQL está probada. Orders ya coordina los estados y movimientos de stock; ver la [guía de Orders](../docs/ORDERS_COMPLETO.md). Queda pendiente la validación con frontend, Entra real y AWS. Los microservicios y sus bases deben mantenerse en una red privada en el despliegue.
 
 ## Estructura
 
@@ -62,6 +62,7 @@ Catalog necesita estas variables en la misma terminal donde se inicia Maven:
 | `CATALOG_DB_PASSWORD` | Obligatoria, sin valor predeterminado |
 | `JWT_ISSUER_URI` | Emisor del tenant, igual que en el BFF |
 | `JWT_AUDIENCE` | Audiencia de la API, igual que en el BFF |
+| `ORDERS_SERVICE_CLIENT_ID` | Identidad técnica permitida para stock; vacío deshabilita ese acceso |
 | `API_DOCS_ENABLED` | `false` por defecto |
 
 Configurar los valores JWT reales antes de usar la API. Los predeterminados son referencias para arrancar, no una configuración de identidad utilizable. No existe un modo de desarrollo que permita saltarse la seguridad.
@@ -86,13 +87,13 @@ Flyway es el único encargado de crear y modificar tablas. Hibernate tiene `ddl-
 
 ## Pruebas
 
-62 pruebas rápidas, sin Docker:
+69 pruebas rápidas, sin Docker:
 
 ```powershell
 .\mvnw.cmd clean test
 ```
 
-Las 62 anteriores y 44 adicionales con PostgreSQL temporal, requiere Docker:
+Las 69 anteriores y 47 adicionales con PostgreSQL temporal, requiere Docker:
 
 ```powershell
 .\mvnw.cmd clean verify -Ppostgres-it

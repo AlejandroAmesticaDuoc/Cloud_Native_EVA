@@ -43,6 +43,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(StockConflictException.class)
     ResponseEntity<Object> stockConflict(StockConflictException exception, HttpServletRequest request) {
+        if (exception instanceof InsufficientStockException) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).header("X-Stock-Result", "rejected")
+                    .body(error(HttpStatus.CONFLICT, exception.getMessage(), request));
+        }
         return response(HttpStatus.CONFLICT, exception.getMessage(), request);
     }
 

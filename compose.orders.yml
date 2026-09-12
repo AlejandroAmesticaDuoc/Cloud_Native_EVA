@@ -1,0 +1,54 @@
+services:
+  postgres-orders:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Define POSTGRES_ADMIN_PASSWORD}
+      ORDERS_DB_PASSWORD: ${ORDERS_DB_PASSWORD:?Define ORDERS_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:${ORDERS_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - orders_postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/002-create-orders.sh:/docker-entrypoint-initdb.d/002-create-orders.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${ORDERS_DB_PASSWORD}\" psql -h 127.0.0.1 -U pedidos360_orders -d pedidos360_orders -Atqc 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  catalog:
+    environment:
+      ORDERS_SERVICE_CLIENT_ID: ${ORDERS_SERVICE_CLIENT_ID:-}
+
+  orders:
+    build: ./ms-pedidos360-orders
+    environment:
+      ORDERS_DB_URL: jdbc:postgresql://postgres-orders:5432/pedidos360_orders
+      ORDERS_DB_USERNAME: pedidos360_orders
+      ORDERS_DB_PASSWORD: ${ORDERS_DB_PASSWORD:?Define ORDERS_DB_PASSWORD}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define el emisor real de Entra ID}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define la audiencia real de la API}
+      CATALOG_SERVICE_URL: http://catalog:8082
+      ORDERS_SERVICE_CLIENT_ID: ${ORDERS_SERVICE_CLIENT_ID:-}
+      ORDERS_SERVICE_CLIENT_SECRET: ${ORDERS_SERVICE_CLIENT_SECRET:-}
+      ORDERS_TOKEN_URI: ${ORDERS_TOKEN_URI:-}
+      ORDERS_CATALOG_SCOPE: ${ORDERS_CATALOG_SCOPE:-}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+    ports:
+      - "127.0.0.1:${ORDERS_PORT:-8081}:8081"
+    depends_on:
+      postgres-orders:
+        condition: service_healthy
+      catalog:
+        condition: service_started
+
+  bff:
+    depends_on:
+      orders:
+        condition: service_started
+
+volumes:
+  orders_postgres_data:

@@ -52,6 +52,8 @@ Los errores tienen `timestamp`, `status`, `error`, `message`, `path` y `traceId`
 
 Estas rutas existen solamente en Catalog. No están expuestas por el BFF y no deben agregarse a API Gateway ni llamarse desde Angular. En esta versión requieren scope `pedidos360.access` y rol `ADMIN` u `OPERADOR`.
 
+También admiten la identidad técnica de Orders: JWT de aplicación con rol `CATALOG_STOCK_WRITE`, `azp` igual a `ORDERS_SERVICE_CLIENT_ID` y sin scope delegado. La [guía de Orders](ORDERS_COMPLETO.md) explica esa configuración. No se asigna este permiso al frontend.
+
 ### Descontar al aceptar un pedido
 
 `POST /internal/v1/catalog/stock/deductions`
@@ -78,11 +80,11 @@ El descuento completo es una sola transacción: si falta un producto activo o no
 
 Sin cuerpo; devuelve `204`. Devuelve exactamente las unidades registradas. Repetir la devolución no suma otra vez. Un pedido sin descuento registrado recibe `409`. Se permite devolver unidades de un producto desactivado, sin reactivarlo.
 
-### Trabajo pendiente en Orders
+### Coordinación con Orders
 
-Orders debe validar el estado y la pertenencia del pedido, conservar sus productos y cantidades, coordinar aceptación/cancelación y manejar reintentos. Catalog no puede comprobar si existe un pedido real porque no consulta la base de Orders. Un `204` de stock no cambia por sí solo el estado del pedido.
+Orders ya valida el estado y la pertenencia del pedido, conserva sus productos y cantidades y coordina aceptación, cancelación y reintentos. Catalog no puede comprobar si existe un pedido real porque no consulta la base de Orders. Un `204` de stock no cambia por sí solo el estado del pedido.
 
-Las cancelaciones iniciadas por `CLIENTE` necesitarán un flujo interno autorizado: reenviar sin más su token a esta ruta devuelve `403`. Debemos definir esa comunicación al implementar Orders, sin inventar roles en el BFF ni permitir que un cliente descuente o libere stock directamente. No hay todavía transacciones distribuidas entre servicios ni una saga implementada.
+Las cancelaciones iniciadas por `CLIENTE` utilizan la identidad técnica de Orders después de comprobar propiedad y estado. El token del cliente sigue recibiendo `403` si llama directamente al stock. Orders guarda una intención antes del movimiento para poder recuperar el flujo; no hay una transacción compartida ni un worker automático de reconciliación.
 
 ## Ejecutar todo en Docker
 
@@ -105,7 +107,7 @@ Invoke-RestMethod http://localhost:8080/actuator/health
 
 Compose espera que PostgreSQL esté saludable antes de iniciar Catalog. El BFF espera que el contenedor Catalog esté iniciado, no que haya terminado su arranque; por eso comprobamos salud antes del CRUD.
 
-Este Compose solo incluye PostgreSQL, Catalog y BFF. Orders, Report, Audit, Notify y los brokers todavía no están incluidos: no esperar que sus rutas funcionen. Los puertos se publican únicamente en `127.0.0.1`. No es un despliegue AWS ni una configuración lista para producción.
+Los dos archivos de este apartado incluyen PostgreSQL, Catalog y BFF. Para sumar Orders y su base, agregar `-f compose.orders.yml`, según su guía. Report, Audit, Notify y los brokers siguen pendientes. Los puertos se publican únicamente en `127.0.0.1`. No es un despliegue AWS ni una configuración lista para producción.
 
 Para revisar problemas sin imprimir variables de entorno:
 
@@ -131,8 +133,8 @@ Con `API_DOCS_ENABLED=true` antes de iniciar los servicios, la UI está en `/swa
 
 ## Comprobaciones realizadas
 
-- BFF: 120 pruebas Maven exitosas.
-- Catalog: 62 pruebas rápidas y 44 con PostgreSQL real, todas exitosas.
+- BFF: 124 pruebas Maven exitosas.
+- Catalog: 69 pruebas rápidas y 47 con PostgreSQL real, todas exitosas.
 - Integración por HTTP con ambos JAR: 26 comprobaciones exitosas.
 - Imágenes Docker construidas y arranque de los tres servicios verificado con Compose; BFF y Catalog respondieron `UP` usando Java 21 y el usuario `10001` (sin root).
 

@@ -8,6 +8,7 @@ import cl.duoc.pedidos360.catalog.entity.Product;
 import cl.duoc.pedidos360.catalog.entity.StockDeduction;
 import cl.duoc.pedidos360.catalog.exception.ProductNotFoundException;
 import cl.duoc.pedidos360.catalog.exception.StockConflictException;
+import cl.duoc.pedidos360.catalog.exception.InsufficientStockException;
 import cl.duoc.pedidos360.catalog.repository.ProductRepository;
 import cl.duoc.pedidos360.catalog.repository.StockDeductionRepository;
 import org.springframework.stereotype.Service;
@@ -34,20 +35,28 @@ public class StockService {
             return;
         }
 
-        // Bloquear en orden de ID reduce el riesgo de interbloqueos entre pedidos.
+        Map<Long, Product> locked = new TreeMap<>();
+        for (Long productId : requestedItems.keySet()) {
+            locked.put(productId, products.findLocked(productId).orElseThrow(ProductNotFoundException::new));
+        }
+        existing = deductions.findById(request.orderId()).orElse(null);
+        if (existing != null) {
+            if (existing.isReleased() || !existing.getItems().equals(requestedItems)) {
+                throw new StockConflictException("El pedido ya tiene otro movimiento de stock registrado");
+            }
+            return;
+        }
         for (Map.Entry<Long, Integer> item : requestedItems.entrySet()) {
-            Product product = products.findLocked(item.getKey()).orElseThrow(ProductNotFoundException::new);
+            Product product = locked.get(item.getKey());
             if (!product.isActive()) {
                 throw new ProductNotFoundException();
             }
             if (product.getStock() < item.getValue()) {
-                throw new StockConflictException("Stock insuficiente para aceptar el pedido");
+                throw new InsufficientStockException();
             }
             product.updateStock(product.getStock() - item.getValue());
         }
 
-        // La PK order_id evita dobles descuentos. Si otra petición ganó la carrera,
-        // el conflicto revierte TODA esta transacción, incluidos los productos.
         deductions.saveAndFlush(new StockDeduction(request.orderId(), requestedItems));
     }
 
@@ -64,7 +73,6 @@ public class StockService {
             if (restored > Integer.MAX_VALUE) {
                 throw new StockConflictException("La devolución supera el stock máximo permitido");
             }
-            // Devolver unidades no reactiva un producto que ADMIN haya desactivado.
             product.updateStock((int) restored);
         }
         deduction.release();

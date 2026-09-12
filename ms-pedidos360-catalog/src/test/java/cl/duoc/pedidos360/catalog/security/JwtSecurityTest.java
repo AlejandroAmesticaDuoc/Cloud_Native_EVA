@@ -33,9 +33,39 @@ class JwtSecurityTest {
     static void jwtConfiguration(DynamicPropertyRegistry registry) {
         registry.add("JWT_ISSUER_URI", ISSUER::issuerUri);
         registry.add("JWT_AUDIENCE", () -> TestJwtIssuer.AUDIENCE);
+        registry.add("catalog.orders-client-id", () -> "orders-service-test");
     }
 
     @AfterAll static void closeIssuer() { ISSUER.close(); }
+
+    @Test
+    void authorizesTheOrdersApplicationOnlyOnInternalStockRoutes() throws Exception {
+        String token = ISSUER.sign(ISSUER.claims().claim("scp", null)
+                .claim("azp", "orders-service-test").claim("roles", List.of("CATALOG_STOCK_WRITE")).build());
+        mvc.perform(post("/internal/v1/catalog/stock/deductions/99999/release")
+                .header("Authorization", "Bearer " + token)).andExpect(status().isConflict());
+        mvc.perform(get("/api/v1/catalog").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/catalog/1").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"wrong-client", "missing-client", "delegated", "wrong-role"})
+    void rejectsOtherIdentitiesOnApplicationStockRoutes(String scenario) throws Exception {
+        var claims = ISSUER.claims().claim("scp", null).claim("azp", "orders-service-test")
+                .claim("roles", List.of("CATALOG_STOCK_WRITE"));
+        switch (scenario) {
+            case "wrong-client" -> claims.claim("azp", "another-service");
+            case "missing-client" -> claims.claim("azp", null);
+            case "delegated" -> claims.claim("scp", "pedidos360.access");
+            case "wrong-role" -> claims.claim("roles", List.of("ADMIN"));
+            default -> throw new IllegalArgumentException();
+        }
+        mvc.perform(post("/internal/v1/catalog/stock/deductions/99999/release")
+                .header("Authorization", "Bearer " + ISSUER.sign(claims.build())))
+                .andExpect(status().isForbidden());
+    }
 
     @Test
     void shouldAcceptSignedTokenWithTheRequiredScope() throws Exception {

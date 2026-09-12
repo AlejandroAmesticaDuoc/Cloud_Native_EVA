@@ -49,6 +49,8 @@ Volumen persistente de datos
 
 Se utilizarán dos registros de aplicación:
 
+Estos dos registros corresponden al frontend y la API. Orders agrega un tercero para su identidad técnica de comunicación con Catalog, sin login interactivo; ver [Orders completo](ORDERS_COMPLETO.md).
+
 ### Aplicación frontend
 
 Tipo:
@@ -120,6 +122,8 @@ El login de Entra puede utilizarse desde localhost siempre que la URL esté regi
 
 `compose.postgres.yml` levanta la base local. Combinándolo con `compose.catalog.yml` se ejecutan PostgreSQL, Catalog y BFF en una misma red de desarrollo. La preparación y los comandos están en [Catalog completo](CATALOG_COMPLETO.md).
 
+Agregar `-f compose.orders.yml` al mismo comando incorpora Orders y su propia base PostgreSQL en `postgres-orders:5432`, publicada localmente en el puerto 5433. No modifica ni reinicializa la base existente de Catalog.
+
 El despliegue completo sigue pendiente de infraestructura. La solución planificada incluye:
 
 - BFF.
@@ -143,7 +147,7 @@ http://catalog:8082
 
 No se deben escribir direcciones IP fijas en el código.
 
-Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; una aplicación en la misma red Docker usa `postgres:5432`. Los archivos locales deben combinarse en un solo comando con ambos argumentos `-f`, no iniciarse como proyectos separados. Orders todavía no está incluido, por lo que sus rutas no funcionarán en este Compose parcial.
+Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; Catalog dentro de Docker usa `postgres:5432` y Orders usa `postgres-orders:5432`. Los archivos locales deben combinarse en un solo comando con los tres argumentos `-f`, no iniciarse como proyectos separados. La mensajería y los servicios restantes aún no están incluidos.
 
 ## Despliegue AWS
 

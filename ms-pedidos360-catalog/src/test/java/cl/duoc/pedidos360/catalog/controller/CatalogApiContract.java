@@ -31,6 +31,21 @@ public abstract class CatalogApiContract {
     private static final String API = "/api/v1/catalog";
     private static final String STOCK = "/internal/v1/catalog/stock/deductions";
 
+    @Test
+    void shouldRejectFractionalStock() throws Exception {
+        mvc.perform(patch(API + "/1/stock").with(admin()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"stock\":1.5}")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldIdentifyConfirmedInsufficientStock() throws Exception {
+        long id = product(1).getId();
+        mvc.perform(post(STOCK).with(admin()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"orderId\":9200,\"items\":[{\"productId\":" + id + ",\"quantity\":2}]}"))
+                .andExpect(status().isConflict()).andExpect(header().string("X-Stock-Result", "rejected"));
+        assertEquals(1, products.findById(id).orElseThrow().getStock());
+    }
+
     protected JwtRequestPostProcessor admin() {
         return jwt().authorities(new SimpleGrantedAuthority("SCOPE_pedidos360.access"),
                 new SimpleGrantedAuthority("ROLE_ADMIN"));

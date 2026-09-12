@@ -81,4 +81,18 @@ class CatalogPostgresApiIT extends CatalogApiContract {
             return 0;
         }
     }
+
+    @Test
+    void identicalConcurrentOrdersSucceedEvenWhenTheFirstConsumesAllStock() throws Exception {
+        long id = product(3).getId();
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> tryDeduction(start, 9010, id, 3));
+            var second = executor.submit(() -> tryDeduction(start, 9010, id, 3));
+            start.countDown();
+            assertEquals(2, first.get(15, TimeUnit.SECONDS) + second.get(15, TimeUnit.SECONDS));
+        }
+        assertEquals(0, products.findById(id).orElseThrow().getStock());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM stock_deductions", Integer.class));
+    }
 }

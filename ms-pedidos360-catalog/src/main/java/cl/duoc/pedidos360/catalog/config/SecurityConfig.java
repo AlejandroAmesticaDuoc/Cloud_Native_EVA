@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 import cl.duoc.pedidos360.catalog.security.AuthenticationErrorHandler;
+import cl.duoc.pedidos360.catalog.security.OrdersServiceAuthorization;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -28,7 +29,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationErrorHandler errors,
-            JwtAuthenticationConverter converter,
+            JwtAuthenticationConverter converter, OrdersServiceAuthorization serviceAuthorization,
             @Value("${springdoc.api-docs.enabled:false}") boolean docsEnabled) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -48,7 +49,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/catalog/{id}").access(scopeAndRole("ADMIN"))
                         .requestMatchers(HttpMethod.POST, "/internal/v1/catalog/stock/deductions",
                                 "/internal/v1/catalog/stock/deductions/{orderId}/release")
-                        .access(scopeAndRole("ADMIN", "OPERADOR"))
+                        .access(AuthorizationManagers.anyOf(scopeAndRole("ADMIN", "OPERADOR"), serviceAuthorization))
                         .anyRequest().denyAll())
                 .exceptionHandling(errorsConfig -> errorsConfig.authenticationEntryPoint(errors).accessDeniedHandler(errors))
                 .oauth2ResourceServer(oauth -> oauth.authenticationEntryPoint(errors).accessDeniedHandler(errors)

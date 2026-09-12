@@ -2,7 +2,7 @@
 
 ## Objetivo de este paso
 
-Vamos a ejecutar PostgreSQL en nuestro computador para desarrollar sin depender de una cuenta cloud. Catalog ya incluye CRUD, seguridad y operaciones internas de stock. Las bases y usuarios de los demás microservicios se crearán en sus próximos pasos.
+Vamos a ejecutar PostgreSQL en nuestro computador para desarrollar sin depender de una cuenta cloud. Esta guía prepara Catalog, que ya incluye CRUD, seguridad y operaciones internas de stock. Orders utiliza otra base y usuario, descritos en la [guía de Orders](ORDERS_COMPLETO.md).
 
 Este cambio no modifica las rutas ni los DTO que consume el BFF. El cambio de motor debe informarse al docente; no estamos dando por aprobada una modificación de la pauta.
 
@@ -150,7 +150,7 @@ Desde la carpeta de Catalog:
 .\mvnw.cmd clean test
 ```
 
-Estas 62 pruebas no necesitan Docker ni contraseñas. Verifican API, validaciones, JWT, OpenAPI y persistencia. H2 se utiliza exclusivamente en el classpath de test, con las mismas migraciones SQL; no demuestra por sí solo compatibilidad con PostgreSQL.
+Estas 69 pruebas no necesitan Docker ni contraseñas. Verifican API, validaciones, JWT, OpenAPI y persistencia. H2 se utiliza exclusivamente en el classpath de test, con las mismas migraciones SQL; no demuestra por sí solo compatibilidad con PostgreSQL.
 
 Con Docker Desktop iniciado, ejecutar también:
 
@@ -158,7 +158,7 @@ Con Docker Desktop iniciado, ejecutar también:
 .\mvnw.cmd clean verify -Ppostgres-it
 ```
 
-El perfil agrega 44 pruebas de `ProductPostgresIT` y `CatalogPostgresApiIT`. Testcontainers levanta PostgreSQL temporal, sin utilizar la base de desarrollo, y lo elimina al finalizar. Verifica persistencia, permisos SQL, CRUD, rollback e idempotencia ante solicitudes concurrentes. Si Docker no está disponible, la integración falla en vez de omitirse silenciosamente.
+El perfil agrega 47 pruebas de `ProductPostgresIT` y `CatalogPostgresApiIT`. Testcontainers levanta PostgreSQL temporal, sin utilizar la base de desarrollo, y lo elimina al finalizar. Verifica persistencia, permisos SQL, CRUD, rollback e idempotencia ante solicitudes concurrentes. Si Docker no está disponible, la integración falla en vez de omitirse silenciosamente.
 
 El perfil Maven `postgres-it` no es un perfil de ejecución de Spring. No hay que usarlo en `spring-boot:run`.
 
