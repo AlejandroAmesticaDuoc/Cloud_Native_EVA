@@ -379,6 +379,16 @@ class OrdersClientTest {
         server.verify();
     }
 
+    @Test
+    void shouldPreserveForbiddenOwnershipResponse() {
+        server.expect(requestTo(ORDERS_URL + "/1001"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).body("detalle privado"));
+        var exception = assertThrows(cl.duoc.pedidos360.bff.exception.ForbiddenOperationException.class,
+                () -> ordersClient.getOrder(1001L));
+        assertFalse(exception.getMessage().contains("detalle privado"));
+        server.verify();
+    }
+
     private CreateOrderCommand validCreateCommand() {
         return new CreateOrderCommand(
                 "usuario-entra-id",

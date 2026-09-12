@@ -5,6 +5,7 @@ spring:
   jackson:
     deserialization:
       fail-on-unknown-properties: true
+      accept-float-as-int: false
 
   http:
     clients:
@@ -60,4 +61,4 @@ springdoc:
 
   packages-to-scan: cl.duoc.pedidos360.bff.controller
   paths-to-match: /api/v1/**
-  override-with-generic-response: false    
+  override-with-generic-response: false
