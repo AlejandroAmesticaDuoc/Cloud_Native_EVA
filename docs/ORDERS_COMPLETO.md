@@ -141,7 +141,7 @@ No usar `down -v` ni eliminar los volúmenes de desarrollo. Cambiar una variable
 
 ## Pruebas reproducibles
 
-Resultado del bloque: BFF 124 pruebas; Catalog 69 rápidas y 47 con PostgreSQL; Orders 84 rápidas y 53 con PostgreSQL. Todas pasaron. La integración HTTP agregó 64 comprobaciones; el Compose de cinco contenedores arrancó con los tres servicios en Java 21 y usuario sin root.
+Resultado del bloque original de pedidos: BFF 124 pruebas; Catalog 69 rápidas y 47 con PostgreSQL; Orders 84 rápidas y 53 con PostgreSQL. Todas pasaron. La integración HTTP agregó 64 comprobaciones; el Compose de cinco contenedores arrancó con los tres servicios en Java 21 y usuario sin root. Después se agregó mensajería: Orders pasó a 88 pruebas rápidas y 56 con PostgreSQL; los resultados de Notify están en [Notificaciones](NOTIFY_RABBITMQ.md).
 
 Requiere Java, Node 22+ y Docker Desktop con contenedores Linux:
 
@@ -162,4 +162,4 @@ Para pruebas manuales, importar [Pedidos360 Orders](../postman/Pedidos360-Orders
 
 ## Pendiente de la solución completa
 
-Este bloque no incluye RabbitMQ, Kafka, Notify, Audit ni Report. Tampoco demuestra el login Angular/MSAL con usuarios reales ni el despliegue AWS. Esos componentes se trabajan después del flujo principal de pedidos y stock.
+RabbitMQ y Notify se agregaron en el siguiente bloque, documentado en [Notificaciones](NOTIFY_RABBITMQ.md). Orders ahora guarda un aviso junto con cada creación o cambio efectivo de estado. Kafka, Audit y Report siguen pendientes. Tampoco se ha demostrado el login Angular/MSAL con usuarios reales ni el despliegue AWS.

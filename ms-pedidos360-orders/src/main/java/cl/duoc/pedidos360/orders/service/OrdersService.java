@@ -10,6 +10,7 @@ import cl.duoc.pedidos360.orders.entity.*;
 import cl.duoc.pedidos360.orders.exception.*;
 import cl.duoc.pedidos360.orders.repository.OrderRepository;
 import cl.duoc.pedidos360.orders.security.CurrentUser;
+import cl.duoc.pedidos360.orders.messaging.NotificationOutbox;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -21,10 +22,13 @@ public class OrdersService {
     private final OrderRepository repository;
     private final CatalogClient catalog;
     private final TransactionTemplate transactions;
+    private final NotificationOutbox notifications;
 
-    public OrdersService(OrderRepository repository, CatalogClient catalog, PlatformTransactionManager manager) {
+    public OrdersService(OrderRepository repository, CatalogClient catalog, PlatformTransactionManager manager,
+            NotificationOutbox notifications) {
         this.repository = repository;
         this.catalog = catalog;
+        this.notifications = notifications;
         transactions = new TransactionTemplate(manager);
         transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -58,7 +62,11 @@ public class OrdersService {
             var product = catalog.product(item.productId(), accessToken, traceId);
             items.add(new OrderItem(item.productId(), item.quantity(), product.price()));
         }
-        return transactions.execute(tx -> response(repository.saveAndFlush(new PurchaseOrder(user.id(), items))));
+        return transactions.execute(tx -> {
+            PurchaseOrder order = repository.saveAndFlush(new PurchaseOrder(user.id(), items));
+            notifications.enqueue(order, traceId);
+            return response(order);
+        });
     }
 
     public OrderResponse changeStatus(long id, OrderStatus target, CurrentUser user, String traceId) {
@@ -85,7 +93,10 @@ public class OrdersService {
             boolean stockRequired = target == OrderStatus.ACEPTADO
                     || (target == OrderStatus.CANCELADO && order.getStatus() == OrderStatus.ACEPTADO);
             if (stockRequired) order.prepare(target);
-            else order.complete(target);
+            else {
+                order.complete(target);
+                notifications.enqueue(order, traceId);
+            }
             repository.flush();
             return new Prepared(response(order), stockRequired);
         }));
@@ -112,6 +123,7 @@ public class OrdersService {
                 return new Outcome(response(order), true);
             }
             order.complete(target);
+            notifications.enqueue(order, traceId);
             repository.flush();
             return new Outcome(response(order), false);
         }));

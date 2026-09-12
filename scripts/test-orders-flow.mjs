@@ -7,6 +7,7 @@ import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
+import { notificationHarness } from './notify-smoke-support.mjs';
 
 const execute = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +42,11 @@ let applicationTokenRequests = 0;
 let serviceStockRequests = 0;
 const serviceClientId = 'orders-integration-client';
 const serviceSecret = randomBytes(24).toString('hex');
+const withNotify = process.argv.includes('--notify');
+const notifications = withNotify ? notificationHarness({
+  dockerCommand: (args, variables = {}) => dockerCommand(args, { ...notifications.brokerEnvironment, ...variables }),
+  launch, ready, stop, waitFor
+}) : null;
 
 const authServer = createServer(async (request, response) => {
   let body;
@@ -193,6 +199,7 @@ async function cleanUp() {
   await stop(bff);
   await stop(orders);
   await stop(catalog);
+  await notifications?.cleanUp();
   if (catalogProxy.listening) await new Promise(resolve => catalogProxy.close(resolve));
   if (authServer.listening) await new Promise(resolve => authServer.close(resolve));
   if (databaseId && /^[a-f0-9]{64}$/.test(databaseId)) {
@@ -205,9 +212,11 @@ try {
   for (const name of ['ms-pedidos360-catalog', 'ms-pedidos360-orders', 'ms-pedidos360-bff']) {
     assert.ok(existsSync(jar(name)), `Primero compila ${name} con Maven: falta el JAR`);
   }
+  if (withNotify) assert.ok(existsSync(jar('ms-pedidos360-notify')), 'Primero compila Notify con Maven');
   await dockerCommand(['info', '--format', '{{.ServerVersion}}']);
   await new Promise(resolve => authServer.listen(0, '127.0.0.1', resolve));
   issuer = `http://127.0.0.1:${authServer.address().port}`;
+  const notifyEnvironment = notifications ? await notifications.start() : { ORDERS_NOTIFICATIONS_ENABLED: 'false' };
   console.log('Preparando bases temporales para Catalog y Orders...');
   databaseId = await dockerCommand(['run', '-d', '--rm', '--name', `pedidos360-orders-test-${randomUUID()}`,
     '--label', 'pedidos360.test=true', '-p', '127.0.0.1::5432',
@@ -232,6 +241,7 @@ try {
   catalogTarget = await ready(catalog, 'Catalog');
   await new Promise(resolve => catalogProxy.listen(0, '127.0.0.1', resolve));
   const ordersEnv = {
+    ...notifyEnvironment,
     ORDERS_DB_URL: `jdbc:postgresql://127.0.0.1:${databasePort}/pedidos360_orders`,
     CATALOG_SERVICE_URL: `http://127.0.0.1:${catalogProxy.address().port}`,
     ORDERS_SERVICE_CLIENT_ID: serviceClientId, ORDERS_SERVICE_CLIENT_SECRET: serviceSecret,
@@ -339,6 +349,19 @@ try {
   assert.ok(bobOrders.length > 0 && bobOrders.every(order => order.customerId === 'bob'));
   const managedOrders = await request(bffUrl, 'GET', api, 200, admin);
   assert.ok(managedOrders.length > bobOrders.length);
+  if (notifications) {
+    await notifications.verifyFlow(sql, async () => {
+      const pending = await createOrder(1);
+      await request(bffUrl, 'POST', `${api}/${pending.id}/cancel`, 204, alice);
+    }, async () => {
+      await stop(bff);
+      await stop(orders);
+      orders = launch('ms-pedidos360-orders', ordersEnv);
+      ordersUrl = await ready(orders, 'Orders con RabbitMQ caído');
+      bff = launch('ms-pedidos360-bff', { CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
+      bffUrl = await ready(bff, 'BFF recuperado');
+    });
+  }
   await stop(orders);
   await request(bffUrl, 'GET', api, 502, alice);
   console.log(`SUCCESS: ${checks} comprobaciones BFF -> Orders -> Catalog -> PostgreSQL.`);

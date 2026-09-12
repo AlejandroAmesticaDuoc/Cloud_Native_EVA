@@ -130,7 +130,7 @@ El despliegue completo sigue pendiente de infraestructura. La solución planific
 - Orders.
 - Catalog.
 - PostgreSQL, si se decide administrarlo en contenedor en ese ambiente.
-- Posteriormente Notify.
+- Notify y Mailpit para probar correos localmente.
 - RabbitMQ.
 - Kafka.
 - Zookeeper.
@@ -147,7 +147,7 @@ http://catalog:8082
 
 No se deben escribir direcciones IP fijas en el código.
 
-Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; Catalog dentro de Docker usa `postgres:5432` y Orders usa `postgres-orders:5432`. Los archivos locales deben combinarse en un solo comando con los tres argumentos `-f`, no iniciarse como proyectos separados. La mensajería y los servicios restantes aún no están incluidos.
+Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; Catalog dentro de Docker usa `postgres:5432` y Orders usa `postgres-orders:5432`. Los archivos locales deben combinarse en un solo comando, no iniciarse como proyectos separados. Para incluir RabbitMQ, Notify y Mailpit se agrega un cuarto argumento: `-f compose.notify.yml`. Las variables y pruebas están en [Notificaciones](NOTIFY_RABBITMQ.md). Kafka, Audit y Report aún no están incluidos.
 
 ## Despliegue AWS
 

@@ -1,0 +1,67 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.3.5-management-alpine
+    hostname: pedidos360-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  mailpit:
+    image: axllent/mailpit:v1.30.6
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: 500
+    volumes:
+      - mailpit_data:/data
+
+  orders:
+    environment:
+      ORDERS_NOTIFICATIONS_ENABLED: "true"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+      RABBITMQ_EMAIL_QUEUE: ${RABBITMQ_EMAIL_QUEUE:-q.cmd.email}
+      RABBITMQ_EMAIL_DLQ: ${RABBITMQ_EMAIL_DLQ:-q.cmd.email.dlq}
+
+  notify:
+    build: ./ms-pedidos360-notify
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+      RABBITMQ_EMAIL_QUEUE: ${RABBITMQ_EMAIL_QUEUE:-q.cmd.email}
+      RABBITMQ_EMAIL_DLQ: ${RABBITMQ_EMAIL_DLQ:-q.cmd.email.dlq}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      NOTIFY_EMAIL_FROM: ${NOTIFY_EMAIL_FROM:-no-reply@pedidos360.test}
+      NOTIFY_EMAIL_RECIPIENT: ${NOTIFY_EMAIL_RECIPIENT:-demo@pedidos360.test}
+    ports:
+      - "127.0.0.1:${NOTIFY_PORT:-8083}:8083"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+volumes:
+  rabbitmq_data:
+  mailpit_data:

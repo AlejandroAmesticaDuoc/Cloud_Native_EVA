@@ -96,6 +96,12 @@ public abstract class OrdersApiContract {
                 .andExpect(jsonPath("$.total").value(3601.50)).andExpect(jsonPath("$.createdAt").exists())
                 .andExpect(jsonPath("$.version").doesNotExist()).andExpect(jsonPath("$.pendingStatus").doesNotExist());
         assertEquals(1, repository.count());
+        String payload = jdbc.queryForObject("SELECT payload FROM notification_outbox", String.class);
+        assertNotNull(payload);
+        assertTrue(payload.contains("\"status\":\"CREADO\""));
+        assertTrue(payload.contains("\"traceId\":\"orders-test\""));
+        assertFalse(payload.contains("Authorization"));
+        assertFalse(payload.contains("Bearer"));
         verify(catalog).product(eq(10L), anyString(), eq("orders-test"));
         verify(catalog, never()).deduct(any(), anyString());
     }
@@ -225,6 +231,7 @@ public abstract class OrdersApiContract {
         }
         verifyNoInteractions(catalog);
         assertEquals(OrderStatus.CANCELADO, repository.findById(id).orElseThrow().getStatus());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
     }
 
     @Test
@@ -235,6 +242,7 @@ public abstract class OrdersApiContract {
                     .andExpect(status().isNoContent());
         }
         verify(catalog, times(1)).release(eq(id), anyString());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
     }
 
     @Test
@@ -273,6 +281,7 @@ public abstract class OrdersApiContract {
         var stored = repository.findById(id).orElseThrow();
         assertEquals(OrderStatus.CREADO, stored.getStatus());
         assertNull(stored.getPendingStatus());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
         mvc.perform(post("/api/v1/orders/" + id + "/cancel").with(user("ana", "CLIENTE"))).andExpect(status().isNoContent());
     }
 
@@ -285,6 +294,7 @@ public abstract class OrdersApiContract {
         var stored = repository.findById(id).orElseThrow();
         assertEquals(OrderStatus.CREADO, stored.getStatus());
         assertEquals(OrderStatus.ACEPTADO, stored.getPendingStatus());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
         mvc.perform(post("/api/v1/orders/" + id + "/cancel").with(user("ana", "CLIENTE"))).andExpect(status().isConflict());
         mvc.perform(patch("/api/v1/orders/" + id + "/status").with(user("op", "OPERADOR"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ACEPTADO\"}"))
