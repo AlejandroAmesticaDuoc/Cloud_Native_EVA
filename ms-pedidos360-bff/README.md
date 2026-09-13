@@ -12,13 +12,13 @@ Se encuentra implementado:
 - Autorización por scope y roles.
 - Configuración CORS.
 - Consulta del usuario autenticado.
-- Endpoints de pedidos y catálogo.
-- Clientes HTTP para Orders y Catalog.
+- Endpoints de pedidos, catálogo y consultas paginadas de auditoría.
+- Clientes HTTP para Orders, Catalog y Audit.
 - Propagación del Access Token y X-Trace-Id hacia los servicios.
 - Manejo de errores y tiempos de espera.
 - Documentación Swagger/OpenAPI.
 
-Al cierre de este bloque se verificaron 124 pruebas exitosas.
+Al incorporar Audit se verificaron 150 pruebas exitosas.
 
 El BFF conserva el `403` cuando Orders rechaza el acceso por propiedad del pedido. Los IDs, cantidades y valores de stock enviados como decimales se rechazan con `400`; no se truncan a enteros.
 
@@ -28,14 +28,14 @@ El JWT debe incluir expiración, además de superar la validación de firma, emi
 
 Esto no significa que la integración completa esté terminada. Todavía debemos probar con el tenant real de Entra ID, los microservicios del equipo, el frontend y AWS API Gateway.
 
-Las rutas de auditoría y reportería tienen reglas de autorización, pero sus controladores y clientes HTTP reales aún no están implementados.
+Las rutas de auditoría ya tienen controladores y cliente HTTP reales, con acceso para ADMIN y AUDITOR. Aceptan afterId (desde 0) y size (1 a 100, por defecto 50); devuelven items y nextAfterId. Reportería todavía tiene solo sus reglas de autorización.
 
 ## Responsabilidad del BFF
 
 El flujo local será:
 
 ```text
-Frontend Angular -> BFF -> Orders / Catalog -> PostgreSQL
+Frontend Angular -> BFF -> Orders / Catalog / Audit -> PostgreSQL
 ```
 
 El flujo previsto en AWS será:
@@ -81,6 +81,7 @@ Maven Wrapper permite ejecutar Maven sin instalarlo globalmente. La primera ejec
 | `JWT_AUDIENCE` | Audience acordada para la API protegida. No corresponde al Client ID del frontend. |
 | `ORDERS_SERVICE_URL` | URL base de Orders. Por defecto: `http://localhost:8081`. |
 | `CATALOG_SERVICE_URL` | URL base de Catalog. Por defecto: `http://localhost:8082`. |
+| `AUDIT_SERVICE_URL` | URL base de Audit. Por defecto: `http://localhost:8085`. |
 | `ALLOWED_ORIGINS` | Orígenes permitidos, separados por coma. Por defecto: `http://localhost:4200`. |
 | `BFF_HTTP_CONNECT_TIMEOUT` | Tiempo máximo de conexión. Por defecto: `3s`. |
 | `BFF_HTTP_READ_TIMEOUT` | Tiempo máximo de espera de lectura. Por defecto: `10s`. |
@@ -135,7 +136,7 @@ La respuesta esperada contiene:
 }
 ```
 
-Esta comprobación solamente confirma la salud del BFF. No demuestra que Orders, Catalog o PostgreSQL estén disponibles.
+Esta comprobación solamente confirma la salud del BFF. No demuestra que Orders, Catalog, Audit o PostgreSQL estén disponibles.
 
 Para detener la aplicación, utilizar `Ctrl + C`.
 
@@ -235,7 +236,7 @@ El BFF utiliza los siguientes códigos principales:
 | `502` | Fallo de comunicación o respuesta no utilizable del microservicio. |
 | `500` | Error interno inesperado del BFF. |
 
-El detalle del intercambio con los microservicios está en el [contrato interno](docs/CONTRATO_INTERNO_BFF_SERVICIOS.md).
+El detalle del intercambio con los microservicios está en el [contrato interno](docs/CONTRATO_INTERNO_BFF_SERVICIOS.md). Audit utiliza AUDIT_SERVICE_URL, por defecto http://localhost:8085. Sus errores internos se traducen a 502 controlado.
 
 ## Seguridad del repositorio
 
@@ -254,6 +255,6 @@ Los ejemplos de configuración deben utilizar valores de referencia, nunca crede
 - Confirmar los contratos con Orders y Catalog.
 - Probar con tokens reales de Entra ID.
 - Probar las llamadas desde Angular.
-- Acordar e implementar las conexiones básicas de auditoría y reportería.
+- Acordar e implementar las conexiones básicas de reportería.
 - Coordinar el contenedor del BFF con el encargado de infraestructura.
 - Probar el flujo completo mediante AWS API Gateway.
