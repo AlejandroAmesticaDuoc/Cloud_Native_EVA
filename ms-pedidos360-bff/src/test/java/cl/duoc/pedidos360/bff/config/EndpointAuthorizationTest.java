@@ -18,19 +18,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(EndpointAuthorizationTest.ContractTestController.class)
 class EndpointAuthorizationTest {
 
     private static final String REQUIRED_SCOPE =
@@ -53,6 +49,9 @@ class EndpointAuthorizationTest {
 
     @MockitoBean
     private cl.duoc.pedidos360.bff.service.AuditService auditService;
+
+    @MockitoBean
+    private cl.duoc.pedidos360.bff.service.ReportsService reportsService;
 
     @Test
     void shouldApplyClienteOrderPermissions()
@@ -329,16 +328,4 @@ class EndpointAuthorizationTest {
                 """;
     }
 
-    @RestController
-    static class ContractTestController {
-
-        @GetMapping({
-                "/api/v1/reports/summary",
-                "/api/v1/reports/lead-time"
-        })
-        String getReports() {
-            return "ok";
-        }
-
-    }
 }

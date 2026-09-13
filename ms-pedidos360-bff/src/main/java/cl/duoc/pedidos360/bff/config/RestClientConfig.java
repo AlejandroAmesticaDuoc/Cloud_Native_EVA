@@ -48,6 +48,13 @@ public class RestClientConfig {
         return buildClient(builder, interceptor, baseUrl);
     }
 
+    @Bean
+    public RestClient reportRestClient(RestClient.Builder builder,
+            DownstreamRequestInterceptor interceptor,
+            @Value("${app.clients.report.base-url}") URI baseUrl) {
+        return buildClient(builder, interceptor, baseUrl);
+    }
+
     private RestClient buildClient(
             RestClient.Builder builder,
             DownstreamRequestInterceptor interceptor,

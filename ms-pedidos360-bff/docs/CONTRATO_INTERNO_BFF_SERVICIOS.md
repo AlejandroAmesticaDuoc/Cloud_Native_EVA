@@ -386,16 +386,30 @@ Los parámetros inválidos se rechazan con 400 antes de llamar a Audit. Cualquie
 
 # Reportería
 
-Quedan pendientes las conexiones reales para:
+El BFF utiliza `REPORT_SERVICE_URL` (por defecto `http://localhost:8084`) para:
 
 - `GET /api/v1/reports/summary`
 - `GET /api/v1/reports/lead-time`
 
-Actualmente solo existen sus reglas de autorización y controladores simulados dentro de las pruebas.
+Ambas consultas requieren JWT válido, scope pedidos360.access y rol ADMIN. AUDITOR no tiene acceso a estos KPIs. El BFF reenvía Authorization y X-Trace-Id; Report vuelve a validar el token.
 
-Antes de implementar el cliente HTTP debemos acordar los cuerpos de respuesta de Report.
+Summary acepta `hours`, entero entre 1 y 168, por defecto 24. Devuelve:
 
-La variable `REPORT_SERVICE_URL` aparece en `.env.example`, pero el BFF todavía no la utiliza.
+- totalOrders: pedidos distintos observados por Report.
+- activeOrders: pedidos en CREADO, ACEPTADO, EN_PREPARACION o DESPACHADO.
+- deliveredOrders y cancelledOrders: pedidos en los dos estados finales.
+- ordersByStatus: mapa con los seis estados y sus cantidades, incluidos los ceros.
+- deliveredAmount: suma del total de los pedidos entregados; no acredita pagos.
+- hourlyFrom, hourlyTo: ventana UTC de la serie por hora, con extremo final exclusivo.
+- salesByHour: lista cronológica de `{hour, deliveredOrders, deliveredAmount}`, una entrada por hora, incluyendo horas sin ventas.
+
+Los contadores principales y deliveredAmount consideran todo lo observado, no solo la ventana. hours limita únicamente salesByHour. Se incluye la hora UTC en curso; por eso hourlyTo corresponde al inicio de la siguiente hora.
+
+Lead-time no recibe parámetros. Devuelve `{deliveredOrders, averageSeconds, minimumSeconds, maximumSeconds}`. Solo considera pedidos cuyo último estado es ENTREGADO y calcula entrega menos creación usando las fechas del evento. Las duraciones se expresan en segundos con tres decimales. Sin entregas, deliveredOrders vale 0 y las tres duraciones son null, no cero.
+
+Ambos reportes son proyecciones eventualmente consistentes de Kafka; no consultan Orders ni la base de Audit. Un evento anterior no reemplaza una versión posterior. No incluyen eventos eliminados por Kafka antes de que Report pudiera consumirlos.
+
+Parámetros inválidos se rechazan con 400 antes de llamar a Report. Los errores del servicio, fallos de conexión y respuestas incompletas se traducen a 502 controlado. No se copia el mensaje interno al frontend.
 
 # Checklist de integración
 
