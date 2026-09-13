@@ -2,7 +2,7 @@
 
 ## Alcance de este bloque
 
-Orders publica eventos en `orders.events`. Audit ya consume estos eventos y registra la trazabilidad en su propia base PostgreSQL; Report todavía está pendiente. La publicación no cambia las rutas HTTP de pedidos.
+Orders publica eventos en `orders.events`. Audit registra la trazabilidad y Report calcula KPIs; ambos usan grupos Kafka y bases PostgreSQL independientes. La publicación no cambia las rutas HTTP de pedidos.
 
 Usamos Apache Kafka 4.3.1 en modo KRaft, sin ZooKeeper. Es un único broker local con tres particiones, factor de replicación 1 y retención de siete días. Esta configuración sirve para desarrollo y pruebas; no representa un despliegue seguro ni de alta disponibilidad para AWS.
 
@@ -14,7 +14,7 @@ Pedido confirmado en Orders
   RabbitMQ -> Notify          Kafka orders.events
                                    |
                                    +-> Audit -> PostgreSQL -> consulta por BFF
-                                   +-> Report (pendiente)
+                                   +-> Report -> PostgreSQL -> KPIs por BFF
 ```
 
 ## Cuándo se publica cada evento
@@ -158,7 +158,7 @@ Resultados verificados en este bloque:
 
 ## Próximo paso
 
-Audit está implementado con grupo propio, deduplicación persistente y consultas protegidas para ADMIN/AUDITOR. Ver [Audit completo](AUDIT_COMPLETO.md). El siguiente paso es Report, con otro grupo independiente para recibir todos los eventos sin competir con Audit.
+Audit y Report están implementados con grupos propios, deduplicación persistente y consultas protegidas. Ver [Audit](AUDIT_COMPLETO.md) y [Report](REPORT_COMPLETO.md). El siguiente paso es integrar el frontend y comprobar Entra real y AWS.
 
 ## Referencias
 

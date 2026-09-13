@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import { notificationHarness } from './notify-smoke-support.mjs';
+import { reportHarness } from './report-smoke-support.mjs';
 import { auditHarness } from './audit-smoke-support.mjs';
 import { kafkaHarness } from './kafka-smoke-support.mjs';
 
@@ -45,9 +46,11 @@ let serviceStockRequests = 0;
 const serviceClientId = 'orders-integration-client';
 const serviceSecret = randomBytes(24).toString('hex');
 const withNotify = process.argv.includes('--notify');
-const withAudit = process.argv.includes('--audit');
+const withReport = process.argv.includes('--report');
+const withAudit = process.argv.includes('--audit') || withReport;
 const kafka = process.argv.includes('--kafka') || withAudit ? kafkaHarness({ dockerCommand, dockerInput, waitFor }) : null;
 const audit = withAudit ? auditHarness({ dockerCommand, launch, ready, stop, waitFor, kafka }) : null;
+const report = withReport ? reportHarness({ dockerCommand, launch, ready, stop, waitFor, kafka }) : null;
 const notifications = withNotify ? notificationHarness({
   dockerCommand: (args, variables = {}) => dockerCommand(args, { ...notifications.brokerEnvironment, ...variables }),
   launch, ready, stop, waitFor
@@ -220,6 +223,7 @@ async function cleanUp() {
   await stop(catalog);
   await notifications?.cleanUp();
   await audit?.cleanUp();
+  await report?.cleanUp();
   await kafka?.cleanUp();
   if (catalogProxy.listening) await new Promise(resolve => catalogProxy.close(resolve));
   if (authServer.listening) await new Promise(resolve => authServer.close(resolve));
@@ -235,12 +239,14 @@ try {
   }
   if (withNotify) assert.ok(existsSync(jar('ms-pedidos360-notify')), 'Primero compila Notify con Maven');
   if (withAudit) assert.ok(existsSync(jar('ms-pedidos360-audit')), 'Primero compila Audit con Maven');
+  if (withReport) assert.ok(existsSync(jar('ms-pedidos360-report')), 'Primero compila Report con Maven');
   await dockerCommand(['info', '--format', '{{.ServerVersion}}']);
   await new Promise(resolve => authServer.listen(0, '127.0.0.1', resolve));
   issuer = `http://127.0.0.1:${authServer.address().port}`;
   const notifyEnvironment = notifications ? await notifications.start() : { ORDERS_NOTIFICATIONS_ENABLED: 'false' };
   const kafkaEnvironment = kafka ? await kafka.start() : { ORDERS_EVENTS_ENABLED: 'false' };
   const auditEnvironment = audit ? await audit.start(kafkaEnvironment) : {};
+  const reportEnvironment = report ? await report.start(kafkaEnvironment) : {};
   console.log('Preparando bases temporales para Catalog y Orders...');
   databaseId = await dockerCommand(['run', '-d', '--rm', '--name', `pedidos360-orders-test-${randomUUID()}`,
     '--label', 'pedidos360.test=true', '-p', '127.0.0.1::5432',
@@ -274,7 +280,7 @@ try {
   };
   orders = launch('ms-pedidos360-orders', ordersEnv);
   let ordersUrl = await ready(orders, 'Orders');
-  bff = launch('ms-pedidos360-bff', { ...auditEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
+  bff = launch('ms-pedidos360-bff', { ...auditEnvironment, ...reportEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
   let bffUrl = await ready(bff, 'BFF');
   const admin = token();
   const operator = token(['OPERADOR'], { oid: 'operador' });
@@ -346,7 +352,7 @@ try {
   await stop(orders);
   orders = launch('ms-pedidos360-orders', ordersEnv);
   ordersUrl = await ready(orders, 'Orders reiniciado');
-  bff = launch('ms-pedidos360-bff', { ...auditEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
+  bff = launch('ms-pedidos360-bff', { ...auditEnvironment, ...reportEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
   bffUrl = await ready(bff, 'BFF reiniciado');
   await setStatus(recovery.id, 'ACEPTADO');
   assert.equal(await getStock(product.id), 7);
@@ -384,7 +390,7 @@ try {
     await stop(orders);
     orders = launch('ms-pedidos360-orders', ordersEnv);
     ordersUrl = await ready(orders, 'Orders con broker caído');
-    bff = launch('ms-pedidos360-bff', { ...auditEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
+    bff = launch('ms-pedidos360-bff', { ...auditEnvironment, ...reportEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
     bffUrl = await ready(bff, 'BFF recuperado');
   };
   if (notifications) await notifications.verifyFlow(sql, createAndCancel, restartOrders);
@@ -395,13 +401,22 @@ try {
     reconnectBff: async url => {
       auditEnvironment.AUDIT_SERVICE_URL = url;
       await stop(bff);
-      bff = launch('ms-pedidos360-bff', { ...auditEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
+      bff = launch('ms-pedidos360-bff', { ...auditEnvironment, ...reportEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
       bffUrl = await ready(bff, 'BFF con Audit reiniciado');
+    }
+  });
+  if (report) await report.verifyFlow({
+    sql, createAndCancel, request: (...args) => request(bffUrl, ...args), token, directRequest: request,
+    reconnectBff: async url => {
+      reportEnvironment.REPORT_SERVICE_URL = url;
+      await stop(bff);
+      bff = launch('ms-pedidos360-bff', { ...auditEnvironment, ...reportEnvironment, CATALOG_SERVICE_URL: catalogTarget, ORDERS_SERVICE_URL: ordersUrl });
+      bffUrl = await ready(bff, 'BFF con Report reiniciado');
     }
   });
   await stop(orders);
   await request(bffUrl, 'GET', api, 502, alice);
-  console.log(`SUCCESS: ${checks} comprobaciones BFF -> Orders -> Catalog -> PostgreSQL.`);
+  console.log(`SUCCESS: ${checks} comprobaciones HTTP y de pedidos en la solución.`);
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

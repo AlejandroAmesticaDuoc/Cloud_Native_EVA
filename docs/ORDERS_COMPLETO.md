@@ -162,4 +162,4 @@ Para pruebas manuales, importar [Pedidos360 Orders](../postman/Pedidos360-Orders
 
 ## Pendiente de la solución completa
 
-RabbitMQ y Notify se agregaron en [Notificaciones](NOTIFY_RABBITMQ.md). La publicación de eventos está en [Kafka y eventos](KAFKA_EVENTOS.md). Orders guarda ambos mensajes junto con cada creación o cambio efectivo de estado. [Audit](AUDIT_COMPLETO.md) ya conserva ese historial y ofrece consultas protegidas por el BFF; Report sigue pendiente. Tampoco se ha demostrado el login Angular/MSAL con usuarios reales ni el despliegue AWS.
+RabbitMQ y Notify se agregaron en [Notificaciones](NOTIFY_RABBITMQ.md). La publicación de eventos está en [Kafka y eventos](KAFKA_EVENTOS.md). Orders guarda ambos mensajes junto con cada creación o cambio efectivo de estado. [Audit](AUDIT_COMPLETO.md) conserva ese historial y ofrece consultas protegidas por el BFF; [Report](REPORT_COMPLETO.md) calcula estados, montos entregados por hora y lead time. Falta demostrar el login Angular/MSAL con usuarios reales y el despliegue AWS.

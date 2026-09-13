@@ -220,7 +220,7 @@ feat/services-aws-integration
 
 ### Alcance básico de mensajería
 
-RabbitMQ y Kafka se trabajan después del flujo principal de seguridad. Estado actual: RabbitMQ, Notify y la publicación de eventos Kafka ya están implementados para pruebas locales. Audit y Report son los siguientes servicios. Ver [Notify y RabbitMQ](NOTIFY_RABBITMQ.md) y [Kafka y eventos](KAFKA_EVENTOS.md).
+RabbitMQ y Kafka se trabajan después del flujo principal de seguridad. Estado actual: RabbitMQ, Notify, Kafka, Audit y Report están implementados para pruebas locales. Cada consumidor de eventos tiene un grupo Kafka y una base propios. Ver [Notify y RabbitMQ](NOTIFY_RABBITMQ.md), [Kafka y eventos](KAFKA_EVENTOS.md), [Audit](AUDIT_COMPLETO.md) y [Report](REPORT_COMPLETO.md).
 
 Inicialmente se considera:
 
@@ -254,8 +254,8 @@ orders.events
   - `OrderStatusChanged`
   - `OrderCancelled`
 
-- Audit Service consumirá los eventos para registrar la trazabilidad.
-- Report Service podrá consumirlos posteriormente para generar estadísticas.
+- Audit Service consume los eventos para registrar la trazabilidad.
+- Report Service consume los mismos eventos con otro grupo para generar estadísticas.
 
 ### AWS
 

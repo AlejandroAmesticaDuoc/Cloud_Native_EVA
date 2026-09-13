@@ -69,7 +69,13 @@ La eliminación de un producto debería ser lógica para no perder el historial 
 | `GET` | `/api/v1/reports/summary` | `ADMIN` | Obtiene un resumen de pedidos y ventas |
 | `GET` | `/api/v1/reports/lead-time` | `ADMIN` | Consulta el tiempo promedio de entrega |
 
-Estas rutas podrán comenzar con respuestas básicas y luego conectarse con Kafka.
+Ambas rutas están implementadas con una proyección de Kafka en PostgreSQL, sin consultar Orders al generar el reporte. Requieren rol ADMIN y scope pedidos360.access.
+
+Summary acepta hours entre 1 y 168 (por defecto 24). Devuelve totalOrders, activeOrders, deliveredOrders, cancelledOrders, ordersByStatus, deliveredAmount, hourlyFrom, hourlyTo y salesByHour. La serie agrupa pedidos ENTREGADOS por hora de entrega UTC e incluye horas vacías. hours solo limita la serie; los contadores principales consideran toda la proyección observada.
+
+Lead-time devuelve deliveredOrders, averageSeconds, minimumSeconds y maximumSeconds. Calcula entrega menos creación para pedidos ENTREGADOS, en segundos con tres decimales; sin entregas las duraciones son null.
+
+Los montos entregados no representan pagos confirmados. Los datos son eventualmente consistentes. Ver [contrato completo de Report](REPORT_COMPLETO.md).
 
 ## Auditoría
 

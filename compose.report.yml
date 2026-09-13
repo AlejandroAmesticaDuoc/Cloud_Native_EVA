@@ -1,0 +1,51 @@
+services:
+  postgres-report:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Define POSTGRES_ADMIN_PASSWORD}
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD:?Define REPORT_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:${REPORT_POSTGRES_PORT:-5435}:5432"
+    volumes:
+      - report_postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/004-create-report.sh:/docker-entrypoint-initdb.d/004-create-report.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${REPORT_DB_PASSWORD}\" psql -h 127.0.0.1 -U pedidos360_report -d pedidos360_report -Atqc 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  report:
+    build: ./ms-pedidos360-report
+    environment:
+      REPORT_DB_URL: jdbc:postgresql://postgres-report:5432/pedidos360_report
+      REPORT_DB_USERNAME: pedidos360_report
+      REPORT_DB_PASSWORD: ${REPORT_DB_PASSWORD:?Define REPORT_DB_PASSWORD}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define el emisor real de Entra ID}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define la audiencia real de la API}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      REPORT_EVENTS_ENABLED: "true"
+      REPORT_KAFKA_GROUP: ${REPORT_KAFKA_GROUP:-pedidos360-report-v1}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
+    ports:
+      - "127.0.0.1:${REPORT_PORT:-8084}:8084"
+    depends_on:
+      postgres-report:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  bff:
+    environment:
+      REPORT_SERVICE_URL: http://report:8084
+    depends_on:
+      report:
+        condition: service_started
+
+volumes:
+  report_postgres_data:

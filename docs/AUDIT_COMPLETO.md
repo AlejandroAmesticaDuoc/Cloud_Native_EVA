@@ -129,7 +129,7 @@ Resultados verificados el 12 de septiembre de 2026:
 
 ## Lo que sigue pendiente
 
-Report, integración con frontend, credenciales y roles reales de Entra, y despliegue/pruebas en AWS. Kafka local usa PLAINTEXT: antes de exponerlo en cloud se necesitan red privada, TLS/SASL y permisos de tópicos. También faltan respaldos, política de conservación de Audit, alertas de atraso/rechazos y una estrategia de recuperación fuera de los siete días de retención de Kafka.
+[Report](REPORT_COMPLETO.md) se agregó en el siguiente bloque. Siguen pendientes la integración con frontend, credenciales y roles reales de Entra, y despliegue/pruebas en AWS. Kafka local usa PLAINTEXT: antes de exponerlo en cloud se necesitan red privada, TLS/SASL y permisos de tópicos. También faltan respaldos, política de conservación de Audit, alertas de atraso/rechazos y una estrategia de recuperación fuera de los siete días de retención de Kafka.
 
 No se borran filas de Audit automáticamente. Esto conserva el historial para la evaluación, pero requiere definir una política de retención si el sistema sigue creciendo.
 

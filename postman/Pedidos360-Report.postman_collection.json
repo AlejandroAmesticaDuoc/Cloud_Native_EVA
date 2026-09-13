@@ -1,0 +1,90 @@
+{
+  "info": {
+    "name": "Pedidos360 Report",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "hours",
+      "value": "24"
+    }
+  ],
+  "item": [
+    {
+      "name": "Resumen y ventas por hora",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Trace-Id",
+            "value": "postman-report-001"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/reports/summary?hours={{hours}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Consulta autorizada', () => pm.response.to.have.status(200));",
+              "pm.test('Contrato de reportería', () => { const body = pm.response.json(); pm.expect(body).to.have.property('deliveredOrders'); pm.expect(body).to.have.property('salesByHour'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tiempo de entrega",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Trace-Id",
+            "value": "postman-report-001"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/reports/lead-time"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Consulta autorizada', () => pm.response.to.have.status(200));",
+              "pm.test('Contrato de reportería', () => { const body = pm.response.json(); pm.expect(body).to.have.property('deliveredOrders'); pm.expect(body).to.have.property('averageSeconds'); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
