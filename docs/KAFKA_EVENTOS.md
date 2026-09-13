@@ -2,7 +2,7 @@
 
 ## Alcance de este bloque
 
-Orders publica eventos en `orders.events` para que después Audit registre la trazabilidad y Report genere estadísticas. No cambia el contrato HTTP del BFF ni requiere modificar Angular. Audit y Report todavía no están implementados.
+Orders publica eventos en `orders.events`. Audit ya consume estos eventos y registra la trazabilidad en su propia base PostgreSQL; Report todavía está pendiente. La publicación no cambia las rutas HTTP de pedidos.
 
 Usamos Apache Kafka 4.3.1 en modo KRaft, sin ZooKeeper. Es un único broker local con tres particiones, factor de replicación 1 y retención de siete días. Esta configuración sirve para desarrollo y pruebas; no representa un despliegue seguro ni de alta disponibilidad para AWS.
 
@@ -13,7 +13,7 @@ Pedido confirmado en Orders
        v                            v
   RabbitMQ -> Notify          Kafka orders.events
                                    |
-                                   +-> Audit (siguiente bloque)
+                                   +-> Audit -> PostgreSQL -> consulta por BFF
                                    +-> Report (pendiente)
 ```
 
@@ -81,7 +81,7 @@ No se promete un orden global entre pedidos ni entre Kafka y RabbitMQ. No aument
 
 `ORDERS_EVENTS_ENABLED=false` desactiva la publicación, no el registro de eventos. Al habilitarla se envían los pendientes. Los pedidos anteriores a V3 empiezan con contador 0: su primer cambio posterior será la versión 1, pero no se inventará un evento histórico de creación. Para reconstruir datos anteriores se necesitará una carga inicial explícita, fuera de este bloque.
 
-Los registros publicados del outbox todavía no se limpian automáticamente. Kafka sí elimina datos por retención; Audit deberá persistir el historial que necesite conservar más tiempo.
+Los registros publicados del outbox todavía no se limpian automáticamente. Kafka sí elimina datos por retención; Audit persiste el historial recibido para conservarlo después de ese plazo.
 
 ## Ejecutar con Docker
 
@@ -158,7 +158,7 @@ Resultados verificados en este bloque:
 
 ## Próximo paso
 
-Crear Audit como consumidor con grupo propio, deduplicación persistente y consulta protegida para ADMIN/AUDITOR. Report tendrá otro grupo independiente, para recibir todos los eventos y no competir con Audit por los mensajes. El contrato HTTP de ambos servicios sigue siendo el acordado.
+Audit está implementado con grupo propio, deduplicación persistente y consultas protegidas para ADMIN/AUDITOR. Ver [Audit completo](AUDIT_COMPLETO.md). El siguiente paso es Report, con otro grupo independiente para recibir todos los eventos sin competir con Audit.
 
 ## Referencias
 

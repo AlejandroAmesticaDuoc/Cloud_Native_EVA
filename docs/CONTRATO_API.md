@@ -78,7 +78,11 @@ Estas rutas podrán comenzar con respuestas básicas y luego conectarse con Kafk
 | `GET` | `/api/v1/audit` | `ADMIN`, `AUDITOR` | Lista eventos de auditoría |
 | `GET` | `/api/v1/audit/orders/{orderId}` | `ADMIN`, `AUDITOR` | Muestra la trazabilidad de un pedido |
 
-Auditoría será de solo lectura.
+Auditoría es de solo lectura y registra los eventos de cambios de pedidos publicados por Orders en Kafka.
+
+Ambas rutas aceptan `afterId=0` y `size=50` como valores predeterminados. afterId debe ser entero no negativo y size debe estar entre 1 y 100. La respuesta es `{"items": [], "nextAfterId": null}`; cada item contiene id, recordedAt y event (los 13 campos del evento v1). Se ordena por id local ascendente, no por fecha del cambio. Usar nextAfterId para continuar la consulta.
+
+Sin eventos se devuelve 200 y una lista vacía, sin comprobar existencia en Orders. El historial es eventual y puede crecer durante la paginación. Ver [contrato completo de Audit](AUDIT_COMPLETO.md).
 
 ## Estados del pedido
 

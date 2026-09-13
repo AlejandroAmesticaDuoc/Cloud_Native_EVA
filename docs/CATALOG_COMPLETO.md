@@ -107,7 +107,7 @@ Invoke-RestMethod http://localhost:8080/actuator/health
 
 Compose espera que PostgreSQL esté saludable antes de iniciar Catalog. El BFF espera que el contenedor Catalog esté iniciado, no que haya terminado su arranque; por eso comprobamos salud antes del CRUD.
 
-Los dos archivos de este apartado incluyen PostgreSQL, Catalog y BFF. Para sumar Orders y su base, agregar `-f compose.orders.yml`, según su guía. Report, Audit, Notify y los brokers siguen pendientes. Los puertos se publican únicamente en `127.0.0.1`. No es un despliegue AWS ni una configuración lista para producción.
+Los dos archivos de este apartado incluyen PostgreSQL, Catalog y BFF. Para sumar Orders y su base, agregar `-f compose.orders.yml`, según su guía. Los bloques posteriores agregan Notify, RabbitMQ, Kafka y Audit; ver [Audit completo](AUDIT_COMPLETO.md) para combinar los seis archivos. Report sigue pendiente. Los puertos se publican únicamente en `127.0.0.1`. No es un despliegue AWS ni una configuración lista para producción.
 
 Para revisar problemas sin imprimir variables de entorno:
 

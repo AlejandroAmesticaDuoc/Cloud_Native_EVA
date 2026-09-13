@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 
-export function kafkaHarness({ dockerCommand, waitFor }) {
+export function kafkaHarness({ dockerCommand, dockerInput, waitFor }) {
   let container;
   let assertions = 0;
 
@@ -135,5 +135,12 @@ export function kafkaHarness({ dockerCommand, waitFor }) {
     if (container && /^[a-f0-9]{64}$/.test(container)) await dockerCommand(['rm', '-f', '-v', container]);
   }
 
-  return { start, verifyFlow, cleanUp };
+  async function publish(key, payload) {
+    assert.ok(dockerInput, 'Falta el helper de entrada de Kafka');
+    await dockerInput(['exec', '-i', container, '/opt/kafka/bin/kafka-console-producer.sh',
+      '--bootstrap-server', 'localhost:19092', '--topic', 'orders.events', '--sync',
+      '--producer-property', 'acks=all', '--property', 'parse.key=true'], key + '\t' + payload + '\n');
+  }
+
+  return { start, verifyFlow, publish, cleanUp };
 }

@@ -152,14 +152,15 @@ La autorización será aplicada tanto en el frontend como en el backend. La vali
 - [Orders, estados, stock e identidad técnica](docs/ORDERS_COMPLETO.md)
 - [RabbitMQ, Notify y correo local](docs/NOTIFY_RABBITMQ.md)
 - [Kafka y contrato de eventos](docs/KAFKA_EVENTOS.md)
+- [Audit, historial y consultas protegidas](docs/AUDIT_COMPLETO.md)
 
 ## Cambio de base de datos y estado actual
 
 Se decidió utilizar PostgreSQL por los problemas para habilitar la cuenta del proveedor anterior. Este cambio debe informarse al docente; no se da por aprobada una excepción a la pauta.
 
-Catalog cuenta con CRUD, validaciones, JWT y stock transaccional. Orders crea y consulta pedidos, verifica propiedad, aplica estados y coordina descuentos y devoluciones con una identidad de servicio. Se verificó BFF → Orders → Catalog → PostgreSQL, incluyendo reintentos después de una respuesta perdida y un reinicio. Orders también publica avisos en RabbitMQ y eventos en Kafka mediante registros pendientes en su base. Notify envía los avisos por SMTP a un buzón local de demostración. Report y Audit siguen pendientes, al igual que la prueba con frontend, Entra real y AWS.
+Catalog cuenta con CRUD, validaciones, JWT y stock transaccional. Orders crea y consulta pedidos, verifica propiedad, aplica estados y coordina descuentos y devoluciones con una identidad de servicio. Se verificó BFF → Orders → Catalog → PostgreSQL, incluyendo reintentos después de una respuesta perdida y un reinicio. Orders también publica avisos en RabbitMQ y eventos en Kafka mediante registros pendientes en su base. Notify envía los avisos por SMTP a un buzón local de demostración. Audit consume Kafka, conserva el historial en su propia base y permite consultarlo desde el BFF a ADMIN y AUDITOR. Report sigue pendiente, al igual que la prueba con frontend, Entra real y AWS.
 
-El archivo `compose.postgres.yml` inicia la base de Catalog. Al combinarlo con `compose.catalog.yml` se agregan Catalog y BFF; `compose.orders.yml` incorpora Orders y su propia base. `compose.notify.yml` agrega RabbitMQ, Notify y Mailpit; `compose.kafka.yml` incorpora Kafka y el inicializador del tópico. Usar los cinco archivos con `-f` en un solo comando para la solución local con notificaciones y eventos. No despliegan en AWS. H2 se utiliza solamente en tests; las integraciones utilizan PostgreSQL real con Docker.
+El archivo `compose.postgres.yml` inicia la base de Catalog. Al combinarlo con `compose.catalog.yml` se agregan Catalog y BFF; `compose.orders.yml` incorpora Orders y su propia base. `compose.notify.yml` agrega RabbitMQ, Notify y Mailpit; `compose.kafka.yml` incorpora Kafka y el inicializador del tópico. `compose.audit.yml` añade Audit y su PostgreSQL. Usar los seis archivos con `-f` en un solo comando para la solución local con auditoría. No despliegan en AWS. H2 se utiliza solamente en tests; las integraciones utilizan PostgreSQL real con Docker.
 
 El proyecto activo está en la raíz. La carpeta `CloudNative` conserva una copia antigua del trabajo del equipo, no es una segunda configuración vigente y no debe usarse para ejecutar estos pasos.
 

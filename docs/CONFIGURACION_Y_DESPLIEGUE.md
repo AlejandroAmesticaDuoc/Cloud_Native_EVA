@@ -133,7 +133,7 @@ El despliegue completo sigue pendiente de infraestructura. La solución planific
 - Notify y Mailpit para probar correos localmente.
 - RabbitMQ.
 - Kafka en modo KRaft, sin ZooKeeper.
-- Posteriormente Report y Audit.
+- Audit y su base PostgreSQL; posteriormente Report.
 
 Las URLs internas utilizarán el nombre del servicio Docker.
 
@@ -146,7 +146,7 @@ http://catalog:8082
 
 No se deben escribir direcciones IP fijas en el código.
 
-Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; Catalog dentro de Docker usa `postgres:5432` y Orders usa `postgres-orders:5432`. Los archivos locales deben combinarse en un solo comando, no iniciarse como proyectos separados. Para RabbitMQ, Notify y Mailpit se agrega `-f compose.notify.yml`; para Kafka se suma `-f compose.kafka.yml`. Ver [Notificaciones](NOTIFY_RABBITMQ.md) y [Eventos Kafka](KAFKA_EVENTOS.md). Audit y Report aún no están incluidos.
+Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; dentro de Docker, Catalog usa `postgres:5432`, Orders usa `postgres-orders:5432` y Audit usa `postgres-audit:5432`. Los archivos locales deben combinarse en un solo comando, no iniciarse como proyectos separados. Para RabbitMQ, Notify y Mailpit se agrega `-f compose.notify.yml`; para Kafka se suma `-f compose.kafka.yml`; para Audit se añade `-f compose.audit.yml`. Ver [Notificaciones](NOTIFY_RABBITMQ.md), [Eventos Kafka](KAFKA_EVENTOS.md) y [Audit](AUDIT_COMPLETO.md). Report aún no está incluido.
 
 ## Despliegue AWS
 

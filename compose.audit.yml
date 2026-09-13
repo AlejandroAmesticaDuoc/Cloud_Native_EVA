@@ -1,0 +1,51 @@
+services:
+  postgres-audit:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Define POSTGRES_ADMIN_PASSWORD}
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?Define AUDIT_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:${AUDIT_POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - audit_postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/003-create-audit.sh:/docker-entrypoint-initdb.d/003-create-audit.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${AUDIT_DB_PASSWORD}\" psql -h 127.0.0.1 -U pedidos360_audit -d pedidos360_audit -Atqc 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  audit:
+    build: ./ms-pedidos360-audit
+    environment:
+      AUDIT_DB_URL: jdbc:postgresql://postgres-audit:5432/pedidos360_audit
+      AUDIT_DB_USERNAME: pedidos360_audit
+      AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?Define AUDIT_DB_PASSWORD}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define el emisor real de Entra ID}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define la audiencia real de la API}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      AUDIT_EVENTS_ENABLED: "true"
+      AUDIT_KAFKA_GROUP: ${AUDIT_KAFKA_GROUP:-pedidos360-audit-v1}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
+    ports:
+      - "127.0.0.1:${AUDIT_PORT:-8085}:8085"
+    depends_on:
+      postgres-audit:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
+  bff:
+    environment:
+      AUDIT_SERVICE_URL: http://audit:8085
+    depends_on:
+      audit:
+        condition: service_started
+
+volumes:
+  audit_postgres_data:

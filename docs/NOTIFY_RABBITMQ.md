@@ -141,7 +141,7 @@ Esta prueba utiliza los cuatro archivos Compose del proyecto. Verifica las inter
 - La tabla outbox conserva los registros publicados. La limpieza por antigüedad y las alertas de acumulación quedan para después.
 - El destinatario es una dirección de demostración, no el correo individual de cada cliente. Para producción hay que resolverlo desde una fuente confiable y configurar SMTP autenticado con TLS. Notify admite `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_AUTH` y `SMTP_STARTTLS`; el Compose local fija Mailpit intencionalmente.
 - Se usa un único broker local. Alta disponibilidad, usuarios separados por servicio y permisos mínimos deben revisarse antes de AWS. Las colas se declaran en código para mantener simple esta etapa; no cambiar sus nombres o argumentos con mensajes pendientes sin planificar una migración.
-- Kafka se agregó en el siguiente bloque; ver [Eventos Kafka](KAFKA_EVENTOS.md). Audit, Report y la integración con frontend, Entra real y AWS siguen pendientes.
+- Kafka y Audit se agregaron en bloques posteriores; ver [Eventos Kafka](KAFKA_EVENTOS.md) y [Audit](AUDIT_COMPLETO.md). Report y la integración con frontend, Entra real y AWS siguen pendientes.
 
 ## Referencias técnicas
 

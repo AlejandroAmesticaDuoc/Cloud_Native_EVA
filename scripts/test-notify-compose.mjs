@@ -15,10 +15,11 @@ const docker = [process.env.DOCKER_CLI_PATH,
   process.env.ProgramFiles && join(process.env.ProgramFiles, 'Docker', 'Docker', 'resources', 'bin', 'docker.exe')]
   .find(path => path && existsSync(path)) || 'docker';
 const project = `p360-notify-test-${randomUUID()}`;
-const withKafka = process.argv.includes('--kafka');
+const withAudit = process.argv.includes('--audit');
+const withKafka = process.argv.includes('--kafka') || withAudit;
 const environment = { ...process.env,
   POSTGRES_ADMIN_PASSWORD: randomBytes(24).toString('hex'), CATALOG_DB_PASSWORD: randomBytes(24).toString('hex'),
-  ORDERS_DB_PASSWORD: randomBytes(24).toString('hex'), RABBITMQ_USERNAME: 'compose-test',
+  ORDERS_DB_PASSWORD: randomBytes(24).toString('hex'), AUDIT_DB_PASSWORD: randomBytes(24).toString('hex'), RABBITMQ_USERNAME: 'compose-test',
   RABBITMQ_PASSWORD: randomBytes(24).toString('hex'), RABBITMQ_VHOST: 'pedidos360',
   JWT_ISSUER_URI: 'https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000/v2.0',
   JWT_AUDIENCE: 'compose-test-api', ORDERS_SERVICE_CLIENT_ID: '', ORDERS_SERVICE_CLIENT_SECRET: '',
@@ -27,7 +28,7 @@ const environment = { ...process.env,
   RABBITMQ_EMAIL_DLQ: 'q.cmd.email.dlq', API_DOCS_ENABLED: 'false'
 };
 for (const key of ['POSTGRES_PORT', 'ORDERS_POSTGRES_PORT', 'BFF_PORT', 'CATALOG_PORT', 'ORDERS_PORT',
-  'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT']) environment[key] = '0';
+  'AUDIT_PORT', 'AUDIT_POSTGRES_PORT', 'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT']) environment[key] = '0';
 if (withKafka) {
   const probe = createServer();
   await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
@@ -43,6 +44,7 @@ if (docker !== 'docker') {
 const compose = ['compose', '--env-file', '.env.example', '-p', project,
   '-f', 'compose.postgres.yml', '-f', 'compose.catalog.yml', '-f', 'compose.orders.yml', '-f', 'compose.notify.yml'];
 if (withKafka) compose.push('-f', 'compose.kafka.yml');
+if (withAudit) compose.push('-f', 'compose.audit.yml');
 
 async function run(args, timeout = 120000) {
   const result = await execute(docker, args, {
@@ -67,18 +69,26 @@ async function ready(service, port) {
 }
 
 try {
-  console.log('Validando Compose y construyendo las imágenes de Orders y Notify...');
+  console.log('Validando Compose y construyendo las imágenes de la solución...');
   const configuration = JSON.parse(await run([...compose, 'config', '--format', 'json']));
-  assert.equal(Object.keys(configuration.services).length, withKafka ? 10 : 8);
+  assert.equal(Object.keys(configuration.services).length, withAudit ? 12 : withKafka ? 10 : 8);
   for (const service of Object.values(configuration.services)) {
     for (const port of service.ports || []) assert.equal(port.host_ip, '127.0.0.1');
   }
   assert.equal(configuration.services.notify.environment.SMTP_HOST, 'mailpit');
   assert.equal(configuration.services.orders.environment.ORDERS_NOTIFICATIONS_ENABLED, 'true');
   if (withKafka) assert.match(configuration.services.kafka.environment.CLUSTER_ID, /^[A-Za-z0-9_-]{22}$/);
+  if (withAudit) {
+    assert.equal(configuration.services.audit.environment.KAFKA_BOOTSTRAP_SERVERS, 'kafka:19092');
+    assert.equal(configuration.services.audit.environment.AUDIT_EVENTS_ENABLED, 'true');
+    assert.equal(configuration.services.bff.environment.AUDIT_SERVICE_URL, 'http://audit:8085');
+    assert.equal(configuration.services.audit.environment.AUDIT_DB_USERNAME, 'pedidos360_audit');
+  }
   await run([...compose, 'up', '-d', '--build'], 600000);
-  console.log('Comprobando salud y ejecución sin root de los cuatro servicios Java...');
-  for (const [service, port] of [['bff', 8080], ['catalog', 8082], ['orders', 8081], ['notify', 8083]]) {
+  console.log('Comprobando salud y ejecución sin root de los servicios Java...');
+  const javaServices = [['bff', 8080], ['catalog', 8082], ['orders', 8081], ['notify', 8083]];
+  if (withAudit) javaServices.push(['audit', 8085]);
+  for (const [service, port] of javaServices) {
     await ready(service, port);
     const id = await run([...compose, 'ps', '-q', service]);
     assert.match(id, /^[a-f0-9]{64}$/);
@@ -97,7 +107,7 @@ try {
     assert.equal(await run(['inspect', '--format', '{{.State.ExitCode}}', initializer]), '0');
     console.log('Kafka: tópico orders.events creado con tres particiones.');
   }
-  console.log(`SUCCESS: ${withKafka ? 'nueve contenedores activos y un inicializador' : 'ocho contenedores'}; cuatro servicios Java verificados en Docker Compose.`);
+  console.log(`SUCCESS: ${withAudit ? 'once contenedores activos y un inicializador' : withKafka ? 'nueve contenedores activos y un inicializador' : 'ocho contenedores'}; ${javaServices.length} servicios Java verificados en Docker Compose.`);
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
