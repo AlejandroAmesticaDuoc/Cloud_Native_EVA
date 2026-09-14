@@ -1,16 +1,17 @@
 import {
   ApplicationConfig,
-  importProvidersFrom,
+  inject,
+  provideAppInitializer,
   provideBrowserGlobalErrorListeners
 } from '@angular/core';
-
-import { provideRouter } from '@angular/router';
 
 import {
   HTTP_INTERCEPTORS,
   provideHttpClient,
   withInterceptorsFromDi
 } from '@angular/common/http';
+
+import { provideRouter } from '@angular/router';
 
 import {
   MSAL_GUARD_CONFIG,
@@ -58,6 +59,16 @@ export const appConfig: ApplicationConfig = {
     MsalService,
     MsalGuard,
     MsalBroadcastService,
+
+    /*
+     * Inicializa MSAL ANTES de que Angular
+     * comience a ejecutar guards o servicios.
+     */
+    provideAppInitializer(() => {
+      const msalInstance = inject(MSAL_INSTANCE);
+
+      return msalInstance.initialize();
+    }),
 
     {
       provide: HTTP_INTERCEPTORS,
