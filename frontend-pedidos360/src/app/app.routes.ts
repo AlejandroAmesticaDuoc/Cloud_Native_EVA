@@ -1,6 +1,10 @@
 import { Routes } from '@angular/router';
+import { MsalGuard } from '@azure/msal-angular';
+
 import { Login } from './pages/login/login';
 import { AuthCallback } from './pages/auth-callback/auth-callback';
+import { Dashboard } from './pages/dashboard/dashboard';
+import { AccessDenied } from './pages/access-denied/access-denied';
 
 export const routes: Routes = [
   {
@@ -12,12 +16,21 @@ export const routes: Routes = [
     component: AuthCallback
   },
   {
+    path: 'dashboard',
+    component: Dashboard,
+    canActivate: [MsalGuard]
+  },
+  {
+    path: 'access-denied',
+    component: AccessDenied
+  },
+  {
     path: '',
-    redirectTo: 'login',
+    redirectTo: 'dashboard',
     pathMatch: 'full'
   },
   {
     path: '**',
-    redirectTo: 'login'
+    redirectTo: 'dashboard'
   }
 ];
