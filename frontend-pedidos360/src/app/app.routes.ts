@@ -6,6 +6,9 @@ import { AuthCallback } from './pages/auth-callback/auth-callback';
 import { Dashboard } from './pages/dashboard/dashboard';
 import { AccessDenied } from './pages/access-denied/access-denied';
 import { Catalog } from './pages/catalog/catalog';
+import { Orders } from './pages/orders/orders';
+import { roleGuard } from './core/auth/role.guard';
+
 
 
 export const routes: Routes = [
@@ -26,6 +29,14 @@ export const routes: Routes = [
     path: 'catalog',
     component: Catalog,
     canActivate: [MsalGuard]
+  },
+  {
+    path: 'orders',
+    component: Orders,
+    canActivate: [MsalGuard, roleGuard],
+    data: {
+      roles: ['ADMIN', 'OPERADOR', 'CLIENTE']
+    }
   },
   {
     path: 'access-denied',

@@ -1,0 +1,270 @@
+<div class="orders-container">
+
+  <div class="header">
+
+    <div>
+      <h1>Pedidos</h1>
+      <p>Gestión de pedidos de Pedidos360</p>
+    </div>
+
+    <button
+      type="button"
+      (click)="loadOrders()"
+    >
+      Actualizar
+    </button>
+
+  </div>
+
+  @if (canCreate()) {
+
+    <button
+      type="button"
+      class="new-order-button"
+      (click)="showCreateForm.set(!showCreateForm())"
+    >
+      Nuevo pedido
+    </button>
+
+  }
+
+  @if (showCreateForm()) {
+
+    <section class="create-order">
+
+      <h2>Crear pedido</h2>
+
+      <div class="item-selector">
+
+        <label>
+          Producto
+
+          <select
+            [(ngModel)]="selectedProductId"
+          >
+
+            <option [ngValue]="0">
+              Selecciona un producto
+            </option>
+
+            @for (
+              product of products();
+              track product.id
+            ) {
+
+              <option
+                [ngValue]="product.id"
+                [disabled]="product.stock <= 0"
+              >
+                {{ product.name }}
+                - ${{ product.price }}
+                - Stock: {{ product.stock }}
+              </option>
+
+            }
+
+          </select>
+        </label>
+
+        <label>
+          Cantidad
+
+          <input
+            type="number"
+            min="1"
+            [(ngModel)]="selectedQuantity"
+          >
+        </label>
+
+        <button
+          type="button"
+          (click)="addItem()"
+        >
+          Agregar
+        </button>
+
+      </div>
+
+      @if (newOrderItems().length > 0) {
+
+        <div class="selected-items">
+
+          <h3>Productos del pedido</h3>
+
+          @for (
+            item of newOrderItems();
+            track item.productId
+          ) {
+
+            <div class="selected-item">
+
+              <div>
+                <strong>
+                  {{ getProductName(item.productId) }}
+                </strong>
+
+                <p>
+                  Cantidad: {{ item.quantity }}
+                </p>
+
+                <p>
+                  Subtotal:
+                  ${{
+                    getProductPrice(item.productId)
+                    * item.quantity
+                  }}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="danger-button"
+                (click)="removeItem(item.productId)"
+              >
+                Quitar
+              </button>
+
+            </div>
+
+          }
+
+          <h3>
+            Total estimado:
+            ${{ getNewOrderTotal() }}
+          </h3>
+
+          <button
+            type="button"
+            (click)="createOrder()"
+          >
+            Confirmar pedido
+          </button>
+
+        </div>
+      }
+
+    </section>
+
+  }
+
+  @if (loading()) {
+
+    <p>
+      Cargando pedidos...
+    </p>
+
+  }
+
+  @if (error()) {
+
+    <div class="error">
+      {{ error() }}
+    </div>
+
+  }
+
+  @if (!loading() && !error()) {
+
+    @if (orders().length === 0) {
+
+      <p>
+        No existen pedidos registrados.
+      </p>
+
+    } @else {
+
+      <div class="orders-grid">
+
+        @for (
+          order of orders();
+          track order.id
+        ) {
+
+          <article class="order-card">
+
+            <div class="order-id">
+              Pedido #{{ order.id }}
+            </div>
+
+            <h2>
+              {{ order.status }}
+            </h2>
+
+            <p>
+              <strong>Cliente:</strong>
+              {{ order.customerId }}
+            </p>
+
+            <p>
+              <strong>Fecha:</strong>
+              {{ order.createdAt }}
+            </p>
+
+            <div class="order-items">
+
+              @for (
+                item of order.items;
+                track item.productId
+              ) {
+
+                <p>
+                  {{ getProductName(item.productId) }}
+                  × {{ item.quantity }}
+                  — ${{ item.unitPrice }}
+                </p>
+
+              }
+
+            </div>
+
+            <p class="order-total">
+              <strong>Total:</strong>
+              ${{ order.total }}
+            </p>
+
+            @if (canUpdateStatus()) {
+
+              <div class="status-editor">
+
+                <label>
+                  Cambiar estado
+
+                  <select
+                    [(ngModel)]="statusValues[order.id]"
+                  >
+
+                    @for (
+                      status of orderStatuses;
+                      track status
+                    ) {
+
+                      <option [ngValue]="status">
+                        {{ status }}
+                      </option>
+
+                    }
+
+                  </select>
+
+                </label>
+
+                <button
+                  type="button"
+                  (click)="updateOrderStatus(order)"
+                >
+                  Actualizar estado
+                </button>
+
+              </div>
+
+            }
+
+          </article>
+
+        }
+
+      </div>
+    }
+  }
+
+</div>
