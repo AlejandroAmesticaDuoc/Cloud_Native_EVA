@@ -1,0 +1,235 @@
+<div class="catalog-container">
+
+  <div class="header">
+    <div>
+      <h1>Catálogo</h1>
+      <p>Productos disponibles en Pedidos360</p>
+    </div>
+
+    <button (click)="loadProducts()">
+      Actualizar
+    </button>
+  </div>
+
+  @if (isAdmin()) {
+
+    <div class="admin-actions">
+
+      <button
+        type="button"
+        (click)="showCreateForm.set(!showCreateForm())"
+      >
+        Nuevo producto
+      </button>
+
+    </div>
+
+    @if (showCreateForm()) {
+
+      <div class="create-form">
+
+        <h2>Crear producto</h2>
+
+        <label>
+          Nombre
+          <input
+            type="text"
+            [(ngModel)]="newProduct.name"
+            maxlength="100"
+          >
+        </label>
+
+        <label>
+          Precio
+          <input
+            type="number"
+            [(ngModel)]="newProduct.price"
+            min="0.01"
+            step="0.01"
+          >
+        </label>
+
+        <label>
+          Stock
+          <input
+            type="number"
+            [(ngModel)]="newProduct.stock"
+            min="0"
+          >
+        </label>
+
+        <button
+          type="button"
+          (click)="createProduct()"
+        >
+          Guardar producto
+        </button>
+
+      </div>
+
+    }
+
+  }
+
+  @if (loading()) {
+    <p class="message">
+      Cargando catálogo...
+    </p>
+  }
+
+  @if (error()) {
+    <div class="error">
+      {{ error() }}
+    </div>
+  }
+
+  @if (!loading() && !error()) {
+
+    @if (products().length === 0) {
+
+      <p class="message">
+        No existen productos registrados.
+      </p>
+
+    } @else {
+
+      <div class="products-grid">
+
+        @for (product of products(); track product.id) {
+
+          <article class="product-card">
+
+            <div class="product-id">
+              Producto #{{ product.id }}
+            </div>
+
+            <h2>
+              {{ product.name }}
+            </h2>
+
+            <p>
+              <strong>Precio:</strong>
+              ${{ product.price }}
+            </p>
+
+            <p>
+              <strong>Stock:</strong>
+              {{ product.stock }}
+            </p>
+
+            <p>
+              <strong>Estado:</strong>
+
+              @if (product.active) {
+                Activo
+              } @else {
+                Inactivo
+              }
+            </p>
+
+            @if (isAdmin()) {
+
+              @if (editingProductId() === product.id) {
+
+                <div class="edit-product">
+
+                  <h3>Editar producto</h3>
+
+                  <label>
+                    Nombre
+
+                    <input
+                      type="text"
+                      [(ngModel)]="editProduct.name"
+                      maxlength="100"
+                    >
+                  </label>
+
+                  <label>
+                    Precio
+
+                    <input
+                      type="number"
+                      [(ngModel)]="editProduct.price"
+                      min="0.01"
+                      step="0.01"
+                    >
+                  </label>
+
+                  <div class="edit-buttons">
+
+                    <button
+                      type="button"
+                      (click)="updateProduct(product)"
+                    >
+                      Guardar
+                    </button>
+
+                    <button
+                      type="button"
+                      class="secondary-button"
+                      (click)="cancelEdit()"
+                    >
+                      Cancelar
+                    </button>
+
+                  </div>
+
+                </div>
+
+              } @else {
+
+                <div class="product-actions">
+
+                  <button
+                    type="button"
+                    (click)="startEdit(product)"
+                  >
+                    Editar
+                  </button>
+
+                  @if (product.active) {
+                    <button
+                      type="button"
+                      class="danger-button"
+                      (click)="deactivateProduct(product)"
+                    >
+                      Desactivar
+                    </button>
+                  }
+
+                </div>
+
+              }
+
+              <div class="stock-editor">
+
+                <label>
+                  Nuevo stock
+
+                  <input
+                    type="number"
+                    min="0"
+                    [(ngModel)]="stockValues[product.id]"
+                  >
+                </label>
+
+                <button
+                  type="button"
+                  (click)="updateStock(product)"
+                >
+                  Actualizar stock
+                </button>
+
+              </div>
+
+            }
+
+          </article>
+        }
+
+      </div>
+    }
+  }
+
+</div>
