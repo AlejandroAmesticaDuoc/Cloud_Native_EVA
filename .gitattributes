@@ -1,0 +1,2 @@
+# Los scripts de inicialización se ejecutan dentro de un contenedor Linux.
+*.sh text eol=lf

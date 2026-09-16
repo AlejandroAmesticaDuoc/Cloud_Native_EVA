@@ -1,0 +1,98 @@
+{
+  "info": {
+    "name": "Pedidos360 Audit",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": "1"
+    },
+    {
+      "key": "afterId",
+      "value": "0"
+    },
+    {
+      "key": "size",
+      "value": "50"
+    }
+  ],
+  "item": [
+    {
+      "name": "Historial general",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Trace-Id",
+            "value": "postman-audit-001"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/audit?afterId={{afterId}}&size={{size}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Consulta exitosa', () => pm.response.to.have.status(200));",
+              "pm.test('Página de auditoría', () => { const body = pm.response.json(); pm.expect(body.items).to.be.an('array'); pm.expect(body).to.have.property('nextAfterId'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Historial de un pedido",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Trace-Id",
+            "value": "postman-audit-001"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/audit/orders/{{orderId}}?afterId={{afterId}}&size={{size}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Consulta exitosa', () => pm.response.to.have.status(200));",
+              "pm.test('Página de auditoría', () => { const body = pm.response.json(); pm.expect(body.items).to.be.an('array'); pm.expect(body).to.have.property('nextAfterId'); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -16,40 +16,40 @@ Audit:     http://localhost:8085
 
 Los servicios se ejecutarán localmente mediante Docker cuando sea posible.
 
-La base de datos estará en Oracle Cloud. Docker se utilizará para ejecutar las aplicaciones, pero no reemplaza la base de datos.
+La base de datos será PostgreSQL. Para desarrollar se ejecutará en un contenedor local. Docker ejecuta el motor, no lo reemplaza.
 
-## Oracle Cloud
+## PostgreSQL
 
-Orders y Catalog se conectarán a Oracle Cloud mediante variables de entorno.
+Cada microservicio con persistencia utilizará una base y un usuario propios, configurados mediante variables de entorno. El primer componente preparado es Catalog.
 
 Datos necesarios:
 
 - URL JDBC.
 - Usuario.
 - Contraseña.
-- Wallet, si la conexión lo requiere.
-- Ruta configurada en `TNS_ADMIN`.
+- Certificado de confianza si la conexión cloud lo requiere.
 
-El Wallet y las credenciales nunca deben subirse a GitHub.
+Las credenciales nunca deben subirse a GitHub. Catalog usa `CATALOG_DB_URL`, `CATALOG_DB_USERNAME` y `CATALOG_DB_PASSWORD`. La plantilla de variables está en `.env.example`.
 
-Cuando se utilice Docker, el Wallet podrá montarse como un volumen de solo lectura.
+La preparación paso a paso está en [PostgreSQL local](POSTGRESQL_LOCAL.md). No hay que instalar el motor directamente en Windows si se utiliza Docker Desktop.
 
 Ejemplo conceptual:
 
 ```text
-Archivo Wallet en el computador
-        |
-        | volumen de solo lectura
-        v
-Contenedor Spring Boot
+Catalog ejecutado desde VS Code / Maven
         |
         v
-Oracle Cloud
+PostgreSQL local en Docker (127.0.0.1:5432)
+        |
+        v
+Volumen persistente de datos
 ```
 
 ## Microsoft Entra ID
 
 Se utilizarán dos registros de aplicación:
+
+Estos dos registros corresponden al frontend y la API. Orders agrega un tercero para su identidad técnica de comunicación con Catalog, sin login interactivo; ver [Orders completo](ORDERS_COMPLETO.md).
 
 ### Aplicación frontend
 
@@ -102,8 +102,7 @@ Contraseñas
 Client secrets
 Tokens
 Credenciales de AWS
-Credenciales de Oracle
-Wallet de Oracle
+Credenciales de PostgreSQL
 ```
 
 ## Desarrollo local
@@ -114,38 +113,48 @@ El primer flujo será:
 Angular local
   -> BFF local
   -> Orders y Catalog locales
-  -> Oracle Cloud
+  -> PostgreSQL local
 ```
 
-El login de de Entra puede utilizarse desde localhost siempre que la URL esté registrada como redirect URI.
+El login de Entra puede utilizarse desde localhost siempre que la URL esté registrada como redirect URI.
 
 ## Docker Compose
 
-Docker Compose se utilizará para levantar:
+`compose.postgres.yml` levanta la base local. Combinándolo con `compose.catalog.yml` se ejecutan PostgreSQL, Catalog y BFF en una misma red de desarrollo. La preparación y los comandos están en [Catalog completo](CATALOG_COMPLETO.md).
+
+Agregar `-f compose.orders.yml` al mismo comando incorpora Orders y su propia base PostgreSQL en `postgres-orders:5432`, publicada localmente en el puerto 5433. No modifica ni reinicializa la base existente de Catalog.
+
+El despliegue completo sigue pendiente de infraestructura. La solución planificada incluye:
 
 - BFF.
 - Orders.
 - Catalog.
-- Posteriormente Notify.
+- PostgreSQL, si se decide administrarlo en contenedor en ese ambiente.
+- Notify y Mailpit para probar correos localmente.
 - RabbitMQ.
-- Kafka.
-- Zookeeper.
-- Posteriormente Report y Audit.
+- Kafka en modo KRaft, sin ZooKeeper.
+- Audit y Report, cada uno con su propia base PostgreSQL y grupo Kafka.
 
 Las URLs internas utilizarán el nombre del servicio Docker.
 
 Ejemplo:
 
 ```text
-http://orders-service:8081
-http://catalog-service:8082
+http://orders:8081
+http://catalog:8082
 ```
 
 No se deben escribir direcciones IP fijas en el código.
 
+Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; dentro de Docker, Catalog usa `postgres:5432`, Orders usa `postgres-orders:5432`, Audit usa `postgres-audit:5432` y Report usa `postgres-report:5432`. Los archivos locales deben combinarse en un solo comando, no iniciarse como proyectos separados. Para RabbitMQ, Notify y Mailpit se agrega `-f compose.notify.yml`; para Kafka se suma `-f compose.kafka.yml`; para Audit se añade `-f compose.audit.yml`; para Report se agrega `-f compose.report.yml`. Ver [Notificaciones](NOTIFY_RABBITMQ.md), [Eventos Kafka](KAFKA_EVENTOS.md), [Audit](AUDIT_COMPLETO.md) y [Report](REPORT_COMPLETO.md).
+
 ## Despliegue AWS
 
 Una vez que la integración local funcione:
+
+Primero se debe acordar dónde alojar PostgreSQL en AWS. Puede ser un servicio administrado o una instalación gestionada por el equipo; no se ha creado ni contratado ninguno. Deben revisarse los costos, las copias de seguridad y el acceso privado antes de desplegar.
+
+El puerto 5432 no debe quedar abierto a Internet. Las conexiones cloud deben verificar el certificado del servidor (por ejemplo, `sslmode=verify-full` en la URL JDBC, con la CA correspondiente). No reutilizar contraseñas locales. La aplicación no debe utilizar un superusuario.
 
 1. Compilar los proyectos.
 2. Crear las imágenes Docker.
@@ -167,7 +176,7 @@ Frontend
   -> AWS API Gateway
   -> BFF en EC2
   -> Microservicios en EC2
-  -> Oracle Cloud
+  -> PostgreSQL en AWS (alojamiento por definir)
 ```
 
 ## CORS
@@ -213,7 +222,7 @@ No se utilizará `*` como origen en producción.
 - El frontend puede iniciar sesión.
 - El BFF acepta un token correcto.
 - El BFF rechaza un token incorrecto.
-- Orders y Catalog se conectan a Oracle Cloud.
+- Orders y Catalog se conectan a sus bases PostgreSQL y ejecutan las migraciones.
 - Las credenciales no aparecen en Git.
 - Las rutas coinciden con el contrato.
 - Los errores entregan códigos correctos.
@@ -226,4 +235,4 @@ No se utilizará `*` como origen en producción.
 - Un usuario autorizado puede acceder.
 - API Gateway enruta correctamente al BFF.
 - El BFF puede comunicarse con los microservicios.
-- Los microservicios pueden comunicarse con Oracle Cloud.
+- Los microservicios pueden comunicarse con PostgreSQL usando conexiones seguras.

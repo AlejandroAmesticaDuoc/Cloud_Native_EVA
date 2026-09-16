@@ -1,0 +1,676 @@
+{
+  "info": {
+    "name": "Pedidos360 - Catalog y BFF",
+    "description": "Prueba manual local en orden. Access Token con scope pedidos360.access y rol ADMIN. No exportar tokens. Crea productos y movimientos de prueba: no ejecutar contra producción. Las rutas internas no pasan por el BFF.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "catalogUrl",
+      "value": "http://localhost:8082",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Salud",
+      "item": [
+        {
+          "name": "Salud BFF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/actuator/health",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Readiness Catalog",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{catalogUrl}}/actuator/health/readiness",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Crear, consultar y editar",
+      "item": [
+        {
+          "name": "Crear producto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Café Postman\",\n  \"price\": 2500.50,\n  \"stock\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));",
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set(\"productId\", pm.response.json().id);",
+                  "  pm.collectionVariables.set(\"orderId\", Date.now());",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar activos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar producto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar nombre y precio",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog/{{productId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Café actualizado\",\"price\":3000}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fijar stock final en 7",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog/{{productId}}/stock",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"stock\":7}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Stock interno (prueba técnica, no flujo Orders)",
+      "item": [
+        {
+          "name": "Descontar 2 unidades",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{catalogUrl}}/internal/v1/catalog/stock/deductions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"orderId\":{{orderId}},\"items\":[{\"productId\":{{productId}},\"quantity\":2}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Repetir descuento sin duplicarlo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{catalogUrl}}/internal/v1/catalog/stock/deductions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"orderId\":{{orderId}},\"items\":[{\"productId\":{{productId}},\"quantity\":2}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprobar stock 5 por BFF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));",
+                  "pm.test(\"Stock descontado una vez\", () => pm.expect(pm.response.json().stock).to.eql(5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Devolver unidades",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{catalogUrl}}/internal/v1/catalog/stock/deductions/{{orderId}}/release"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Repetir devolución sin duplicarla",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{catalogUrl}}/internal/v1/catalog/stock/deductions/{{orderId}}/release"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprobar stock 7 por BFF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));",
+                  "pm.test(\"Stock devuelto una vez\", () => pm.expect(pm.response.json().stock).to.eql(7));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Desactivación lógica",
+      "item": [
+        {
+          "name": "Desactivar producto",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Repetir desactivación",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar desactivado devuelve 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Sin token",
+      "item": [
+        {
+          "name": "BFF exige token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalog",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Catalog exige token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-{{$guid}}"
+              }
+            ],
+            "url": "{{catalogUrl}}/api/v1/catalog",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Respuesta con trazabilidad\", () => pm.expect(pm.response.headers.get(\"X-Trace-Id\")).to.match(/^[A-Za-z0-9._-]{1,100}$/));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

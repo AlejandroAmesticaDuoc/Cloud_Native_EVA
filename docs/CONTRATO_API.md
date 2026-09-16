@@ -69,7 +69,13 @@ La eliminación de un producto debería ser lógica para no perder el historial 
 | `GET` | `/api/v1/reports/summary` | `ADMIN` | Obtiene un resumen de pedidos y ventas |
 | `GET` | `/api/v1/reports/lead-time` | `ADMIN` | Consulta el tiempo promedio de entrega |
 
-Estas rutas podrán comenzar con respuestas básicas y luego conectarse con Kafka.
+Ambas rutas están implementadas con una proyección de Kafka en PostgreSQL, sin consultar Orders al generar el reporte. Requieren rol ADMIN y scope pedidos360.access.
+
+Summary acepta hours entre 1 y 168 (por defecto 24). Devuelve totalOrders, activeOrders, deliveredOrders, cancelledOrders, ordersByStatus, deliveredAmount, hourlyFrom, hourlyTo y salesByHour. La serie agrupa pedidos ENTREGADOS por hora de entrega UTC e incluye horas vacías. hours solo limita la serie; los contadores principales consideran toda la proyección observada.
+
+Lead-time devuelve deliveredOrders, averageSeconds, minimumSeconds y maximumSeconds. Calcula entrega menos creación para pedidos ENTREGADOS, en segundos con tres decimales; sin entregas las duraciones son null.
+
+Los montos entregados no representan pagos confirmados. Los datos son eventualmente consistentes. Ver [contrato completo de Report](REPORT_COMPLETO.md).
 
 ## Auditoría
 
@@ -78,7 +84,11 @@ Estas rutas podrán comenzar con respuestas básicas y luego conectarse con Kafk
 | `GET` | `/api/v1/audit` | `ADMIN`, `AUDITOR` | Lista eventos de auditoría |
 | `GET` | `/api/v1/audit/orders/{orderId}` | `ADMIN`, `AUDITOR` | Muestra la trazabilidad de un pedido |
 
-Auditoría será de solo lectura.
+Auditoría es de solo lectura y registra los eventos de cambios de pedidos publicados por Orders en Kafka.
+
+Ambas rutas aceptan `afterId=0` y `size=50` como valores predeterminados. afterId debe ser entero no negativo y size debe estar entre 1 y 100. La respuesta es `{"items": [], "nextAfterId": null}`; cada item contiene id, recordedAt y event (los 13 campos del evento v1). Se ordena por id local ascendente, no por fecha del cambio. Usar nextAfterId para continuar la consulta.
+
+Sin eventos se devuelve 200 y una lista vacía, sin comprobar existencia en Orders. El historial es eventual y puede crecer durante la paginación. Ver [contrato completo de Audit](AUDIT_COMPLETO.md).
 
 ## Estados del pedido
 

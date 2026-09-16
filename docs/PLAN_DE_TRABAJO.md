@@ -6,6 +6,14 @@ Este documento define cómo dividiremos el desarrollo entre los tres integrantes
 
 La idea es que todos puedan avanzar en paralelo sin modificar los mismos archivos ni quedar bloqueados esperando que otra persona termine completamente su parte.
 
+## Ajuste de responsabilidades
+
+El integrante encargado del BFF también desarrollará los microservicios y la persistencia en PostgreSQL. El tercer integrante se concentrará en infraestructura y AWS. Se mantienen las ramas originales: ambos coordinan sus cambios dentro de `feat/services-aws-integration`, sin crear una cuarta rama de desarrollo.
+
+El integrante 2 trabaja en las carpetas `ms-pedidos360-*` del backend y en `infra/postgres`. El integrante 3 trabaja en el resto de `infra` y en el despliegue. Los archivos de configuración compartidos se revisan entre ambos antes de modificarlos.
+
+Se utilizará PostgreSQL local en Docker para avanzar sin depender de una cuenta cloud. El alojamiento definitivo de PostgreSQL en AWS se definirá después de la integración local. El cambio de motor debe comunicarse al docente.
+
 ## Trabajo inicial del equipo
 
 Antes de comenzar el desarrollo debemos acordar:
@@ -104,7 +112,7 @@ feat/bff-jwt-security
 
 ### Responsabilidades
 
-- Crear el BFF con Spring Boot 3 y Java 21.
+- Mantener el BFF con Spring Boot 4.1.1 y Java 21.
 - Configurar Spring Security.
 - Configurar OAuth2 Resource Server.
 - Validar la firma del JWT mediante JWKS.
@@ -156,7 +164,7 @@ Mientras Entra y los microservicios todavía no estén listos, puede:
 
 ---
 
-## Integrante 3: Servicios e infraestructura
+## Integrantes 2 y 3: Servicios e infraestructura
 
 ### Rama
 
@@ -182,7 +190,7 @@ feat/services-aws-integration
 - Crear los roles del sistema.
 - Crear el scope de Pedidos360.
 - Compartir los identificadores públicos con los demás integrantes.
-- Preparar la conexión con Oracle Cloud.
+- Preparar la conexión con PostgreSQL y un usuario independiente por microservicio.
 - Crear Orders Service.
 - Crear Catalog Service.
 - Crear Dockerfiles.
@@ -198,7 +206,7 @@ feat/services-aws-integration
 - Filtrar pedidos de un cliente.
 - Validar las transiciones de estado.
 - Solicitar el descuento de stock al aceptar un pedido.
-- Persistir información en Oracle Cloud.
+- Persistir información en PostgreSQL.
 
 ### Catalog Service
 
@@ -208,11 +216,11 @@ feat/services-aws-integration
 - Controlar el stock.
 - Validar disponibilidad.
 - Descontar stock al aceptar un pedido.
-- Persistir información en Oracle Cloud.
+- Persistir información en PostgreSQL.
 
 ### Alcance básico de mensajería
 
-RabbitMQ y Kafka se implementarán después de completar el flujo principal de seguridad.
+RabbitMQ y Kafka se trabajan después del flujo principal de seguridad. Estado actual: RabbitMQ, Notify, Kafka, Audit y Report están implementados para pruebas locales. Cada consumidor de eventos tiene un grupo Kafka y una base propios. Ver [Notify y RabbitMQ](NOTIFY_RABBITMQ.md), [Kafka y eventos](KAFKA_EVENTOS.md), [Audit](AUDIT_COMPLETO.md) y [Report](REPORT_COMPLETO.md).
 
 Inicialmente se considera:
 
@@ -246,8 +254,8 @@ orders.events
   - `OrderStatusChanged`
   - `OrderCancelled`
 
-- Audit Service consumirá los eventos para registrar la trazabilidad.
-- Report Service podrá consumirlos posteriormente para generar estadísticas.
+- Audit Service consume los eventos para registrar la trazabilidad.
+- Report Service consume los mismos eventos con otro grupo para generar estadísticas.
 
 ### AWS
 
@@ -266,7 +274,7 @@ Después de completar la integración local:
 ### Criterios de término
 
 - Orders y Catalog compilan.
-- Los microservicios se conectan a Oracle Cloud.
+- Los microservicios se conectan a sus propias bases PostgreSQL.
 - Las reglas de negocio funcionan.
 - Docker Compose levanta las aplicaciones.
 - API Gateway valida el JWT.
@@ -294,7 +302,7 @@ Integración local:
 Angular
   -> BFF
   -> Orders/Catalog
-  -> Oracle Cloud
+  -> PostgreSQL local
 ```
 
 ### Punto de control 3
@@ -306,7 +314,7 @@ Angular
   -> AWS API Gateway
   -> BFF en EC2
   -> Microservicios en EC2
-  -> Oracle Cloud
+  -> PostgreSQL en AWS (alojamiento por definir)
 ```
 
 ---

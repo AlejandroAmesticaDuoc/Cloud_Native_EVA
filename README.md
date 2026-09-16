@@ -12,11 +12,11 @@ En esta primera etapa nos enfocaremos principalmente en implementar la autentica
 
 - El equipo está compuesto por tres integrantes y fue autorizado por el docente.
 - Se utilizará un solo repositorio con distintas carpetas para cada componente.
-- Cada integrante trabajará en una rama propia.
+- Se mantienen las tres ramas acordadas; servicios e infraestructura coordinan carpetas en su rama compartida.
 - El frontend será desarrollado con Angular.
 - La identidad será administrada con Microsoft Entra ID.
 - La infraestructura principal estará en AWS.
-- La base de datos será Oracle Cloud.
+- La base de datos será PostgreSQL. Primero se ejecutará localmente en Docker y luego se definirá su alojamiento en AWS.
 - Se implementará el rol `AUDITOR`.
 - RabbitMQ y Kafka tendrán inicialmente un alcance básico y se ampliarán más adelante.
 - El BFF volverá a validar el JWT aunque API Gateway ya lo haya validado.
@@ -46,10 +46,12 @@ BFF Spring Boot
   +------> Report Service
                  |
                  v
-            Oracle Cloud
+            PostgreSQL
 ```
 
 Microsoft Entra ID será responsable de autenticar a los usuarios y emitir los tokens.
+
+Cada microservicio con persistencia tendrá su propia base y usuario. No se consultarán directamente las tablas de otro servicio. El BFF no se conecta a la base de datos.
 
 AWS API Gateway será la entrada pública del sistema. El BFF y los demás microservicios no deberían quedar expuestos directamente a Internet.
 
@@ -78,9 +80,9 @@ AWS API Gateway será la entrada pública del sistema. El BFF y los demás micro
 - AWS EC2
 - Docker
 - Docker Compose
-- Oracle Cloud
+- PostgreSQL 17
 - RabbitMQ
-- Kafka y Zookeeper
+- Kafka en modo KRaft, sin ZooKeeper
 
 ## Estructura planificada
 
@@ -113,7 +115,7 @@ Las carpetas de código se crearán desde las ramas correspondientes. No es nece
 |---|---|---|
 | `feat/frontend-msal-rbac` | Integrante 1 | Angular, MSAL, guards, interceptor y vistas |
 | `feat/bff-jwt-security` | Integrante 2 | BFF, validación JWT y autorización |
-| `feat/services-aws-integration` | Integrante 3 | Microservicios, Oracle Cloud, Docker y AWS |
+| `feat/services-aws-integration` | Integrantes 2 y 3 | Integrante 2: microservicios y PostgreSQL. Integrante 3: infraestructura y AWS. |
 | `main` | Equipo completo | Código revisado e integrado |
 
 Los nombres de los integrantes serán agregados cuando el equipo los defina.
@@ -144,6 +146,24 @@ La autorización será aplicada tanto en el frontend como en el backend. La vali
 - [Plan de trabajo](docs/PLAN_DE_TRABAJO.md)
 - [Contrato inicial de la API](docs/CONTRATO_API.md)
 - [Configuración y despliegue](docs/CONFIGURACION_Y_DESPLIEGUE.md)
+- [Preparar PostgreSQL local](docs/POSTGRESQL_LOCAL.md)
+- [Estado y ejecución de Catalog](ms-pedidos360-catalog/README.md)
+- [Contrato de Catalog, stock interno y pruebas con el BFF](docs/CATALOG_COMPLETO.md)
+- [Orders, estados, stock e identidad técnica](docs/ORDERS_COMPLETO.md)
+- [RabbitMQ, Notify y correo local](docs/NOTIFY_RABBITMQ.md)
+- [Kafka y contrato de eventos](docs/KAFKA_EVENTOS.md)
+- [Audit, historial y consultas protegidas](docs/AUDIT_COMPLETO.md)
+- [Report, ventas por hora y tiempos de entrega](docs/REPORT_COMPLETO.md)
+
+## Cambio de base de datos y estado actual
+
+Se decidió utilizar PostgreSQL por los problemas para habilitar la cuenta del proveedor anterior. Este cambio debe informarse al docente; no se da por aprobada una excepción a la pauta.
+
+Catalog cuenta con CRUD, validaciones, JWT y stock transaccional. Orders crea y consulta pedidos, verifica propiedad, aplica estados y coordina descuentos y devoluciones con una identidad de servicio. Se verificó BFF → Orders → Catalog → PostgreSQL, incluyendo reintentos después de una respuesta perdida y un reinicio. Orders también publica avisos en RabbitMQ y eventos en Kafka mediante registros pendientes en su base. Notify envía los avisos por SMTP a un buzón local de demostración. Audit conserva el historial para ADMIN y AUDITOR. Report procesa Kafka con otro grupo, mantiene su propia base y entrega a ADMIN el resumen de estados, montos entregados por hora y lead time. Siguen pendientes las pruebas con frontend, Entra real y AWS.
+
+El archivo `compose.postgres.yml` inicia la base de Catalog. Al combinarlo con `compose.catalog.yml` se agregan Catalog y BFF; `compose.orders.yml` incorpora Orders y su propia base. `compose.notify.yml` agrega RabbitMQ, Notify y Mailpit; `compose.kafka.yml` incorpora Kafka y el inicializador del tópico. `compose.audit.yml` y `compose.report.yml` añaden sus servicios y bases PostgreSQL. Usar los siete archivos con `-f` en un solo comando para la solución local completa del backend. No despliegan en AWS. H2 se utiliza solamente en tests; las integraciones utilizan PostgreSQL real con Docker.
+
+El proyecto activo está en la raíz. La carpeta `CloudNative` conserva una copia antigua del trabajo del equipo, no es una segunda configuración vigente y no debe usarse para ejecutar estos pasos.
 
 ## Reglas principales
 
