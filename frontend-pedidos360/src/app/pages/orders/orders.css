@@ -1,0 +1,151 @@
+.orders-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px;
+  font-family: Arial, sans-serif;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 32px;
+}
+
+button {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+  background: #1f5eff;
+  color: white;
+  font-weight: 600;
+}
+
+.new-order-button {
+  margin-bottom: 24px;
+}
+
+.create-order {
+  padding: 24px;
+  margin-bottom: 32px;
+  border: 1px solid #dddddd;
+  border-radius: 12px;
+}
+
+.item-selector {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.item-selector label {
+  font-weight: 600;
+}
+
+.item-selector select,
+.item-selector input {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+}
+
+.selected-items {
+  margin-top: 24px;
+}
+
+.selected-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 0;
+  border-bottom: 1px solid #eeeeee;
+}
+
+.selected-item p {
+  margin: 5px 0;
+}
+
+.orders-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(300px, 1fr)
+  );
+  gap: 20px;
+}
+
+.order-card {
+  padding: 22px;
+  border: 1px solid #dddddd;
+  border-radius: 12px;
+  background: white;
+}
+
+.order-card h2 {
+  margin-top: 8px;
+}
+
+.order-id {
+  font-size: 13px;
+  opacity: 0.65;
+}
+
+.order-items {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid #eeeeee;
+}
+
+.order-total {
+  margin-top: 18px;
+  font-size: 18px;
+}
+
+.danger-button {
+  background: #c62828;
+}
+
+.error {
+  padding: 16px;
+  margin: 20px 0;
+  border: 1px solid #c62828;
+  border-radius: 8px;
+}
+
+.status-editor {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #eeeeee;
+}
+
+.status-editor label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.status-editor select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px;
+  margin-top: 6px;
+  border: 1px solid #cccccc;
+  border-radius: 6px;
+}
+
+.status-editor button {
+  width: 100%;
+}

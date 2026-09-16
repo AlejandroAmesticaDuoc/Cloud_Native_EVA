@@ -1,0 +1,33 @@
+<div class="login-container">
+
+  <h1>Pedidos360</h1>
+
+  @if (isLoggedIn()) {
+
+    <p>Sesión iniciada como:</p>
+
+    <strong>{{ getUsername() }}</strong>
+
+    <br><br>
+
+    <button type="button" (click)="verToken()">
+      Ver información del token
+    </button>
+
+    <br><br>
+
+    <button type="button" (click)="logout()">
+      Cerrar sesión
+    </button>
+
+  } @else {
+
+    <p>Inicia sesión para continuar</p>
+
+    <button type="button" (click)="login()">
+      Iniciar sesión con Microsoft
+    </button>
+
+  }
+
+</div>
