@@ -43,7 +43,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders", "/api/v1/orders/{id}")
                         .access(scopeAndRole("ADMIN", "OPERADOR", "CLIENTE"))
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders")
-                        .access(scopeAndRole("OPERADOR", "CLIENTE"))
+                        .access(scopeAndRole("ADMIN", "OPERADOR", "CLIENTE"))
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/orders/{id}/status")
                         .access(scopeAndRole("ADMIN", "OPERADOR"))
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders/{id}/cancel")

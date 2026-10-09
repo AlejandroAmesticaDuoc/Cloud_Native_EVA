@@ -1,0 +1,127 @@
+<div class="login-page">
+  <div class="background-decoration decoration-one"></div>
+  <div class="background-decoration decoration-two"></div>
+
+  <main class="login-card">
+
+    <div class="brand">
+      <div class="brand-icon">
+        <span>360</span>
+      </div>
+
+      <div>
+        <h1>Pedidos<span>360</span></h1>
+        <p>Gestión inteligente de pedidos</p>
+      </div>
+    </div>
+
+    @if (isLoggedIn()) {
+
+      <section class="session-content">
+        <div class="success-icon">
+          ✓
+        </div>
+
+        <div class="session-heading">
+          <span class="status-badge">
+            Sesión activa
+          </span>
+
+          <h2>¡Bienvenido!</h2>
+
+          <p>
+            Has iniciado sesión correctamente en Pedidos360.
+          </p>
+        </div>
+
+        <div class="user-card">
+          <div class="user-avatar">
+            {{ getUsername().charAt(0).toUpperCase() }}
+          </div>
+
+          <div class="user-data">
+            <span>Cuenta conectada</span>
+            <strong>{{ getUsername() }}</strong>
+          </div>
+
+          <div class="connected-dot"></div>
+        </div>
+
+        <div class="security-info">
+          <div class="security-icon">
+            🔒
+          </div>
+
+          <div>
+            <strong>Acceso protegido</strong>
+            <p>Autenticación administrada mediante Microsoft Entra ID</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button
+            type="button"
+            class="secondary-button"
+            (click)="verToken()">
+            Ver información del token
+          </button>
+
+          <button
+            type="button"
+            class="logout-button"
+            (click)="logout()">
+            Cerrar sesión
+          </button>
+        </div>
+      </section>
+
+    } @else {
+
+      <section class="login-content">
+
+        <div class="welcome">
+          <span class="eyebrow">PORTAL CORPORATIVO</span>
+
+          <h2>Bienvenido a Pedidos360</h2>
+
+          <p>
+            Accede a la plataforma para gestionar pedidos,
+            productos y operaciones de forma segura.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          class="microsoft-button"
+          (click)="login()">
+
+          <span class="microsoft-logo">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+
+          <span>Iniciar sesión con Microsoft</span>
+        </button>
+
+        <div class="secure-access">
+          <span class="lock">🔒</span>
+
+          <div>
+            <strong>Inicio de sesión seguro</strong>
+            <p>Protegido mediante Microsoft Entra ID</p>
+          </div>
+        </div>
+
+      </section>
+
+    }
+
+    <footer>
+      <span class="footer-dot"></span>
+      Pedidos360 · Cloud Native Platform
+    </footer>
+
+  </main>
+</div>

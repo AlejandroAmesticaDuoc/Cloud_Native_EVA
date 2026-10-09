@@ -1,0 +1,1576 @@
+{
+  "info": {
+    "name": "Pedidos360 MQ Admin",
+    "description": "API del microservicio administrador de RabbitMQ (puerto 8086). Requiere un token de ADMIN con scope pedidos360.access en la variable token. Ejecutar las carpetas en orden: crean y luego eliminan recursos de demostración ({{demoExchange}}, {{demoDirectExchange}}, {{demoQueue}}); las carpetas 1 a 4 y 6 funcionan solo con compose.rabbitmq.yml. La carpeta 5 (DLQ) y el listado de cmd.dead.dlx requieren la solución completa, porque las DLQ las declaran los microservicios. Ver docs/RABBITMQ.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8086"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "demoExchange",
+      "value": "ex.demo.ep3"
+    },
+    {
+      "key": "demoQueue",
+      "value": "q.demo.ep3"
+    },
+    {
+      "key": "demoDirectExchange",
+      "value": "ex.demo.direct"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Exchanges",
+      "item": [
+        {
+          "name": "Crear exchange topic",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{demoExchange}}\",\n  \"type\": \"TOPIC\",\n  \"durable\": true,\n  \"autoDelete\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Location del recurso', () => pm.expect(pm.response.headers.get('Location')).to.include('/api/v1/mq-admin/exchanges/'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear exchange direct",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{demoDirectExchange}}\",\n  \"type\": \"DIRECT\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear exchange duplicado (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{demoExchange}}\",\n  \"type\": \"TOPIC\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar exchanges",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Incluye la topología base protegida', () => pm.expect(pm.response.json().some(e => e.name === 'cmd.direct' && e.protectedResource)).to.be.true);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Colas",
+      "item": [
+        {
+          "name": "Crear cola con DLX, TTL y largo máximo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{demoQueue}}\",\n  \"type\": \"CLASSIC\",\n  \"durable\": true,\n  \"autoDelete\": false,\n  \"deadLetterExchange\": \"{{demoDirectExchange}}\",\n  \"deadLetterRoutingKey\": \"demo.failed\",\n  \"messageTtlMs\": 604800000,\n  \"maxLength\": 10000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Location de la cola', () => pm.expect(pm.response.headers.get('Location')).to.include('/api/v1/mq-admin/queues/'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear cola duplicada (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{demoQueue}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear cola con nombre reservado de la topología base (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"q.cmd.kitchen\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar colas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar cola",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues/{{demoQueue}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Mensajes y consumidores', () => { const q = pm.response.json(); pm.expect(q).to.have.property('messages'); pm.expect(q).to.have.property('consumers'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar cola inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues/q.no.existe"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Bindings",
+      "item": [
+        {
+          "name": "Crear binding con comodín en exchange topic",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exchange\": \"{{demoExchange}}\",\n  \"queue\": \"{{demoQueue}}\",\n  \"routingKey\": \"demo.#\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear binding duplicado (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exchange\": \"{{demoExchange}}\",\n  \"queue\": \"{{demoQueue}}\",\n  \"routingKey\": \"demo.#\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comodín en exchange direct (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exchange\": \"{{demoDirectExchange}}\",\n  \"queue\": \"{{demoQueue}}\",\n  \"routingKey\": \"demo.*\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Binding con exchange inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exchange\": \"ex.no.existe\",\n  \"queue\": \"{{demoQueue}}\",\n  \"routingKey\": \"demo.created\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar bindings del exchange",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings?exchange={{demoExchange}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar bindings de la topología base (cmd.dead.dlx)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings?exchange=cmd.dead.dlx"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar binding",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings?exchange={{demoExchange}}&queue={{demoQueue}}&routingKey=demo.%23"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar binding inexistente (404)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings?exchange={{demoExchange}}&queue={{demoQueue}}&routingKey=demo.%23"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar binding sin routingKey (400)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings?exchange={{demoExchange}}&queue={{demoQueue}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Limpieza",
+      "item": [
+        {
+          "name": "Vaciar cola",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues/{{demoQueue}}/messages"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cantidad purgada', () => pm.expect(pm.response.json()).to.have.property('purged'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar cola protegida (409)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues/q.cmd.email"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar exchange protegido (409)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges/cmd.dead.dlx"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar cola solo si está vacía y sin consumidores",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues/{{demoQueue}}?ifUnused=true&ifEmpty=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar cola inexistente (404)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues/{{demoQueue}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar exchange sin bindings",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges/{{demoExchange}}?ifUnused=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar exchange inexistente (404)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges/{{demoExchange}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eliminar exchange direct",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges/{{demoDirectExchange}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. DLQ y alertas",
+      "item": [
+        {
+          "name": "Profundidad, umbral y alerta de las DLQ",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/dead-letter-queues"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Contrato DLQ', () => { const d = pm.response.json()[0]; ['queue','exists','messages','threshold','alert'].forEach(k => pm.expect(d).to.have.property(k)); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reprocesar q.cmd.email.dlq",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/dead-letter-queues/q.cmd.email.dlq/replay",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"maxMessages\": 10\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resultado del replay', () => { const r = pm.response.json(); pm.expect(r).to.have.property('replayed'); pm.expect(r).to.have.property('failed'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reprocesar una cola que no es DLQ (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/dead-letter-queues/q.cmd.email/replay",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"maxMessages\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replay con maxMessages fuera de rango (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/dead-letter-queues/q.cmd.email.dlq/replay",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"maxMessages\": 0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Validaciones (400)",
+      "item": [
+        {
+          "name": "Cola con nombre vacío",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });",
+                  "pm.test('Mensaje claro', () => pm.expect(pm.response.json().message).to.include('obligatorio'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cola con prefijo reservado amq.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"amq.mia\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cola con tipo inválido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"q.demo.invalida\",\n  \"type\": \"STREAM\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cola con TTL negativo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"q.demo.invalida\",\n  \"messageTtlMs\": -5\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cola con maxLength excesivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"q.demo.invalida\",\n  \"maxLength\": 1000001\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "deadLetterRoutingKey sin deadLetterExchange",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"q.demo.invalida\",\n  \"deadLetterRoutingKey\": \"demo.failed\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "QUORUM con autoDelete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"q.demo.invalida\",\n  \"type\": \"QUORUM\",\n  \"autoDelete\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cola transitoria (durable=false)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"q.demo.invalida\",\n  \"durable\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Propiedad desconocida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"q.demo.invalida\",\n  \"exclusive\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JSON mal formado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Exchange sin tipo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/exchanges",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ex.demo.invalido\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Binding con routing key inválida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/bindings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exchange\": \"{{demoExchange}}\",\n  \"queue\": \"{{demoQueue}}\",\n  \"routingKey\": \"demo..#\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nombre inválido en la ruta",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues/amq.gen-123"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Seguridad",
+      "item": [
+        {
+          "name": "Sin token (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Trace-Id",
+                "value": "postman-mqadmin-001"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/mq-admin/queues",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Formato de error común', () => { const b = pm.response.json(); pm.expect(b).to.have.property('message'); pm.expect(b).to.have.property('traceId'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

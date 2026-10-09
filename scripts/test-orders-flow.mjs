@@ -298,7 +298,8 @@ try {
   await request(bffUrl, 'GET', api, 401);
   await request(ordersUrl, 'GET', api, 401);
   await request(bffUrl, 'GET', api, 403, auditor);
-  await request(bffUrl, 'POST', api, 403, admin, { items: [{ productId: 1, quantity: 1 }] });
+  // Desde 0a86033 ADMIN sí puede crear pedidos; AUDITOR sigue sin permiso.
+  await request(bffUrl, 'POST', api, 403, auditor, { items: [{ productId: 1, quantity: 1 }] });
   await request(bffUrl, 'POST', api, 400, alice, { items: [{ productId: 1, quantity: 1.5 }] });
   await request(ordersUrl, 'POST', api, 403, alice,
     { customerId: 'bob', items: [{ productId: 1, quantity: 1 }] });

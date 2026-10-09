@@ -29,7 +29,7 @@ const environment = { ...process.env,
   RABBITMQ_EMAIL_DLQ: 'q.cmd.email.dlq', API_DOCS_ENABLED: 'false'
 };
 for (const key of ['POSTGRES_PORT', 'ORDERS_POSTGRES_PORT', 'BFF_PORT', 'CATALOG_PORT', 'ORDERS_PORT',
-  'REPORT_PORT', 'REPORT_POSTGRES_PORT', 'AUDIT_PORT', 'AUDIT_POSTGRES_PORT', 'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT']) environment[key] = '0';
+  'REPORT_PORT', 'REPORT_POSTGRES_PORT', 'AUDIT_PORT', 'AUDIT_POSTGRES_PORT', 'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT', 'MQ_ADMIN_PORT']) environment[key] = '0';
 if (withKafka) {
   const probe = createServer();
   await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
@@ -43,7 +43,7 @@ if (docker !== 'docker') {
   environment[pathKey] = dirname(docker) + delimiter + (environment[pathKey] || '');
 }
 const compose = ['compose', '--env-file', '.env.example', '-p', project,
-  '-f', 'compose.postgres.yml', '-f', 'compose.catalog.yml', '-f', 'compose.orders.yml', '-f', 'compose.notify.yml'];
+  '-f', 'compose.postgres.yml', '-f', 'compose.catalog.yml', '-f', 'compose.orders.yml', '-f', 'compose.rabbitmq.yml', '-f', 'compose.notify.yml'];
 if (withKafka) compose.push('-f', 'compose.kafka.yml');
 if (withAudit) compose.push('-f', 'compose.audit.yml');
 if (withReport) compose.push('-f', 'compose.report.yml');
@@ -61,10 +61,14 @@ async function ready(service, port) {
   const endpoint = `http://${binding}/actuator/health`;
   const deadline = Date.now() + 120000;
   while (Date.now() < deadline) {
+    // Temporizador normal (no AbortSignal.timeout, que no mantiene vivo el proceso): sin él Node
+    // termina con "unsettled top-level await" mientras el servicio todavía arranca.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
     try {
-      const response = await fetch(endpoint, { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(endpoint, { signal: controller.signal });
       if (response.ok && (await response.json()).status === 'UP') return;
-    } catch {}
+    } catch {} finally { clearTimeout(timer); }
     await delay(500);
   }
   throw new Error(`${service} no llegó a UP`);
@@ -73,7 +77,7 @@ async function ready(service, port) {
 try {
   console.log('Validando Compose y construyendo las imágenes de la solución...');
   const configuration = JSON.parse(await run([...compose, 'config', '--format', 'json']));
-  assert.equal(Object.keys(configuration.services).length, withReport ? 14 : withAudit ? 12 : withKafka ? 10 : 8);
+  assert.equal(Object.keys(configuration.services).length, withReport ? 15 : withAudit ? 13 : withKafka ? 11 : 9);
   for (const service of Object.values(configuration.services)) {
     for (const port of service.ports || []) assert.equal(port.host_ip, '127.0.0.1');
   }
@@ -96,7 +100,7 @@ try {
   }
   await run([...compose, 'up', '-d', '--build'], 600000);
   console.log('Comprobando salud y ejecución sin root de los servicios Java...');
-  const javaServices = [['bff', 8080], ['catalog', 8082], ['orders', 8081], ['notify', 8083]];
+  const javaServices = [['bff', 8080], ['catalog', 8082], ['orders', 8081], ['notify', 8083], ['mq-admin', 8086]];
   if (withAudit) javaServices.push(['audit', 8085]);
   if (withReport) javaServices.push(['report', 8084]);
   for (const [service, port] of javaServices) {
@@ -118,7 +122,7 @@ try {
     assert.equal(await run(['inspect', '--format', '{{.State.ExitCode}}', initializer]), '0');
     console.log('Kafka: tópico orders.events creado con tres particiones.');
   }
-  console.log(`SUCCESS: ${withReport ? 'trece contenedores activos y un inicializador' : withAudit ? 'once contenedores activos y un inicializador' : withKafka ? 'nueve contenedores activos y un inicializador' : 'ocho contenedores'}; ${javaServices.length} servicios Java verificados en Docker Compose.`);
+  console.log(`SUCCESS: ${withReport ? 'catorce contenedores activos y un inicializador' : withAudit ? 'doce contenedores activos y un inicializador' : withKafka ? 'diez contenedores activos y un inicializador' : 'nueve contenedores'}; ${javaServices.length} servicios Java verificados en Docker Compose.`);
 } catch (error) {
   console.error(error.message);
   try {

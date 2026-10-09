@@ -36,6 +36,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new ResponseEntity<>(error(status, message, request), headers, status);
     }
 
+    @ExceptionHandler(InvoiceNotFoundException.class)
+    ResponseEntity<Object> invoiceNotFound(InvoiceNotFoundException exception, HttpServletRequest request) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
     @ExceptionHandler({ConstraintViolationException.class, IllegalArgumentException.class})
     ResponseEntity<Object> invalid(Exception exception, HttpServletRequest request) {
         return response(HttpStatus.BAD_REQUEST, "La solicitud contiene datos inválidos", request);

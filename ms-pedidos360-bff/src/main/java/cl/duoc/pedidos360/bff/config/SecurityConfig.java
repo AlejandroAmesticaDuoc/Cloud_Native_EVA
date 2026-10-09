@@ -98,6 +98,7 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/orders"
                         ).access(scopeAndAnyRole(
+                                "ADMIN",
                                 "CLIENTE",
                                 "OPERADOR"
                         ))

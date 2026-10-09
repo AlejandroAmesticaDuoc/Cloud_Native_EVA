@@ -10,7 +10,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import cl.duoc.pedidos360.report.dto.InvoiceCommand;
 import cl.duoc.pedidos360.report.dto.OrderEvent.Status;
+import cl.duoc.pedidos360.report.exception.InvoiceRejectedException;
 import cl.duoc.pedidos360.report.messaging.EventParserTest;
 import cl.duoc.pedidos360.report.security.support.TestJwtIssuer;
 import cl.duoc.pedidos360.report.service.*;
@@ -48,6 +50,7 @@ class ReportPostgresIT {
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
     @Autowired PlatformTransactionManager manager;
+    @Autowired InvoiceService invoices;
     @MockitoBean Clock clock;
 
     @DynamicPropertySource
@@ -66,6 +69,7 @@ class ReportPostgresIT {
         jdbc.update("DELETE FROM report_events");
         jdbc.update("DELETE FROM report_orders");
         jdbc.update("DELETE FROM report_rejections");
+        jdbc.update("DELETE FROM report_invoices");
         when(clock.instant()).thenReturn(Instant.parse("2026-09-12T14:30:00Z"));
     }
 
@@ -83,6 +87,43 @@ class ReportPostgresIT {
     int count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class); }
     String token(String role) throws Exception {
         return ISSUER.sign(ISSUER.claims().claim("roles", List.of(role)).build());
+    }
+
+    InvoiceCommand invoice(UUID eventId, long orderId, String total) {
+        return new InvoiceCommand(1, eventId, orderId, "cliente-demo", List.of(
+                new InvoiceCommand.Item(7L, 2, new BigDecimal("1500.00")),
+                new InvoiceCommand.Item(9L, 1, new BigDecimal("2990.00"))), new BigDecimal(total),
+                Instant.parse("2026-10-08T18:00:00Z"), "trace-demo-001");
+    }
+
+    @Test
+    void issuesTheInvoiceOnceAndServesItOnlyToAdministrators() throws Exception {
+        var command = invoice(UUID.randomUUID(), 42, "5990.00");
+        assertEquals(InvoiceService.Result.ISSUED, invoices.issue(command));
+        assertEquals(InvoiceService.Result.DUPLICATE, invoices.issue(command));
+        assertEquals(InvoiceService.Result.DUPLICATE, invoices.issue(invoice(UUID.randomUUID(), 42, "5990.00")));
+        assertEquals(1, count("report_invoices"));
+        assertEquals(command.eventId(), jdbc.queryForObject("SELECT event_id FROM report_invoices", UUID.class));
+        mvc.perform(get("/api/v1/reports/invoices/42").header("Authorization", "Bearer " + token("ADMIN")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.folio").value("B-0000000042"))
+                .andExpect(jsonPath("$.netAmount").value(5033.61)).andExpect(jsonPath("$.taxAmount").value(956.39))
+                .andExpect(jsonPath("$.totalAmount").value(5990.00)).andExpect(jsonPath("$.itemCount").value(2))
+                .andExpect(jsonPath("$.issuedAt").value("2026-09-12T14:30:00Z"))
+                .andExpect(jsonPath("$.document").value(org.hamcrest.Matchers.containsString("IVA 19%: 956.39")))
+                .andExpect(jsonPath("$.document").value(org.hamcrest.Matchers.containsString("2 x Producto #7 @ 1500.00 = 3000.00")));
+        for (String role : List.of("CLIENTE", "OPERADOR", "AUDITOR")) {
+            mvc.perform(get("/api/v1/reports/invoices/42").header("Authorization", "Bearer " + token(role)))
+                    .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/v1/reports/invoices/42")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/reports/invoices/999").header("Authorization", "Bearer " + token("ADMIN")))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("Boleta no encontrada"));
+    }
+
+    @Test
+    void rejectsInvoicesWhoseItemsDoNotAddUpWithoutStoringThem() {
+        assertThrows(InvoiceRejectedException.class, () -> invoices.issue(invoice(UUID.randomUUID(), 43, "5990.01")));
+        assertEquals(0, count("report_invoices"));
     }
 
     @Test

@@ -1,0 +1,40 @@
+# Habilita los consumidores RabbitMQ de Catalog (tickets de cocina, q.cmd.kitchen), Report (boletas,
+# q.cmd.invoice) y Audit (auditoría de dead letters, q.audit.dead-letters). Sin este archivo esos
+# servicios no se conectan al broker. Requiere todos los archivos anteriores, en este orden:
+#   docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml up -d --build
+services:
+  catalog:
+    environment:
+      CATALOG_COMMANDS_ENABLED: "true"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  report:
+    environment:
+      REPORT_COMMANDS_ENABLED: "true"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  audit:
+    environment:
+      AUDIT_DEAD_LETTERS_ENABLED: "true"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy

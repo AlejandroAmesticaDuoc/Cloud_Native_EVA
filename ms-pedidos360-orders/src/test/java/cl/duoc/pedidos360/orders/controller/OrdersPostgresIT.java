@@ -18,9 +18,11 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
-import cl.duoc.pedidos360.orders.messaging.NotificationOutbox;
+import java.util.List;
+import cl.duoc.pedidos360.orders.messaging.CommandOutbox;
+import cl.duoc.pedidos360.orders.messaging.CommandType;
 import cl.duoc.pedidos360.orders.messaging.OutboxPublisher;
-import cl.duoc.pedidos360.orders.messaging.RabbitEmailSender;
+import cl.duoc.pedidos360.orders.messaging.RabbitCommandPublisher;
 import cl.duoc.pedidos360.orders.messaging.OrderEventOutbox;
 import cl.duoc.pedidos360.orders.messaging.KafkaEventSender;
 import cl.duoc.pedidos360.orders.messaging.KafkaOutboxPublisher;
@@ -32,7 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Testcontainers
 class OrdersPostgresIT extends OrdersApiContract {
     @Autowired OrdersService orders;
-    @Autowired NotificationOutbox outbox;
+    @Autowired CommandOutbox outbox;
     @Autowired PlatformTransactionManager manager;
     @Autowired OrderEventOutbox eventOutbox;
     @Container
@@ -74,7 +76,8 @@ class OrdersPostgresIT extends OrdersApiContract {
             assertEquals(OrderStatus.ACEPTADO, second.get(15, TimeUnit.SECONDS));
         }
         verify(catalog, times(1)).deduct(any(), anyString());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
+        assertEquals(1, emailCommands());
+        assertEquals(List.of("EMAIL", "KITCHEN_TICKET"), commandTypes(id));
         assertEquals(1, events(id).size());
     }
 
@@ -96,7 +99,7 @@ class OrdersPostgresIT extends OrdersApiContract {
             assertTrue(second.get(15, TimeUnit.SECONDS));
         }
         verify(catalog, times(1)).release(eq(id), anyString());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
+        assertEquals(1, emailCommands());
     }
 
     @Test
@@ -105,7 +108,7 @@ class OrdersPostgresIT extends OrdersApiContract {
         assertThrows(IllegalStateException.class, () -> new TransactionTemplate(manager).executeWithoutResult(tx -> {
             var stored = repository.findLocked(id).orElseThrow();
             stored.complete(OrderStatus.CANCELADO);
-            outbox.enqueue(stored, "rollback-test");
+            outbox.enqueue(stored, List.of(CommandType.EMAIL_PRIORITY), "rollback-test");
             eventOutbox.enqueue(stored, OrderStatus.CREADO, "ana", "rollback-test");
             repository.flush();
             throw new IllegalStateException("rollback");
@@ -121,36 +124,68 @@ class OrdersPostgresIT extends OrdersApiContract {
         long id = order("ana", OrderStatus.CREADO).getId();
         orders.cancel(id, new CurrentUser("ana", Set.of("ROLE_CLIENTE")), "retry-notify");
         String eventId = jdbc.queryForObject("SELECT event_id FROM notification_outbox", String.class);
-        var sender = mock(RabbitEmailSender.class);
-        doThrow(new IllegalStateException("broker unavailable")).doNothing().when(sender).send(anyString(), anyString());
-        var publisher = new OutboxPublisher(jdbc, sender, manager);
+        var sender = mock(RabbitCommandPublisher.class);
+        doThrow(new IllegalStateException("broker unavailable")).doNothing().when(sender)
+                .publish(any(CommandType.class), anyString(), anyString());
+        var publisher = new OutboxPublisher(jdbc, sender, manager, 20);
         publisher.publishNext();
         assertEquals(1, jdbc.queryForObject("SELECT attempts FROM notification_outbox", Integer.class));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox WHERE published_at IS NULL", Integer.class));
         assertTrue(Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT next_attempt_at > CURRENT_TIMESTAMP FROM notification_outbox", Boolean.class)));
         publisher.publishNext();
-        verify(sender, times(1)).send(eq(eventId), anyString());
+        verify(sender, times(1)).publish(eq(CommandType.EMAIL_PRIORITY), eq(eventId), anyString());
         jdbc.update("UPDATE notification_outbox SET next_attempt_at = CURRENT_TIMESTAMP");
         publisher.publishNext();
         publisher.publishNext();
-        verify(sender, times(2)).send(eq(eventId), anyString());
+        verify(sender, times(2)).publish(eq(CommandType.EMAIL_PRIORITY), eq(eventId), anyString());
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox WHERE published_at IS NOT NULL", Integer.class));
+    }
+
+    @Test
+    void retriesWithBackoffUntilMaxAttemptsThenMarksTheCommandAsFailed() throws Exception {
+        long id = order("ana", OrderStatus.CREADO).getId();
+        orders.changeStatus(id, OrderStatus.ACEPTADO, new CurrentUser("op", Set.of("ROLE_OPERADOR")), "max-attempts");
+        var sender = mock(RabbitCommandPublisher.class);
+        doNothing().when(sender).publish(eq(CommandType.EMAIL), anyString(), anyString());
+        doThrow(new IllegalStateException("cola llena")).when(sender)
+                .publish(eq(CommandType.KITCHEN_TICKET), anyString(), anyString());
+        var publisher = new OutboxPublisher(jdbc, sender, manager, 3);
+        publisher.publishNext();
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            publisher.publishNext();
+            if (attempt < 3) {
+                assertTrue(Boolean.TRUE.equals(jdbc.queryForObject("""
+                        SELECT failed_at IS NULL AND next_attempt_at > CURRENT_TIMESTAMP FROM notification_outbox
+                        WHERE command_type = 'KITCHEN_TICKET'""", Boolean.class)));
+                jdbc.update("UPDATE notification_outbox SET next_attempt_at = CURRENT_TIMESTAMP");
+            }
+        }
+        verify(sender, times(1)).publish(eq(CommandType.EMAIL), anyString(), anyString());
+        verify(sender, times(3)).publish(eq(CommandType.KITCHEN_TICKET), anyString(), anyString());
+        assertEquals(3, jdbc.queryForObject(
+                "SELECT attempts FROM notification_outbox WHERE command_type = 'KITCHEN_TICKET'", Integer.class));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM notification_outbox
+                WHERE command_type = 'KITCHEN_TICKET' AND failed_at IS NOT NULL AND published_at IS NULL""", Integer.class));
+        jdbc.update("UPDATE notification_outbox SET next_attempt_at = CURRENT_TIMESTAMP");
+        publisher.publishNext();
+        verify(sender, times(3)).publish(eq(CommandType.KITCHEN_TICKET), anyString(), anyString());
     }
 
     @Test
     void concurrentPublishersDoNotPublishSameLockedRow() throws Exception {
         long id = order("ana", OrderStatus.CREADO).getId();
         orders.cancel(id, new CurrentUser("ana", Set.of("ROLE_CLIENTE")), "concurrent-publish");
-        var sender = mock(RabbitEmailSender.class);
+        var sender = mock(RabbitCommandPublisher.class);
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         doAnswer(call -> {
             entered.countDown();
             assertTrue(release.await(10, TimeUnit.SECONDS));
             return null;
-        }).when(sender).send(anyString(), anyString());
-        var publisher = new OutboxPublisher(jdbc, sender, manager);
+        }).when(sender).publish(any(CommandType.class), anyString(), anyString());
+        var publisher = new OutboxPublisher(jdbc, sender, manager, 20);
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(publisher::publishNext);
             try {
@@ -159,7 +194,7 @@ class OrdersPostgresIT extends OrdersApiContract {
             } finally { release.countDown(); }
             first.get(5, TimeUnit.SECONDS);
         }
-        verify(sender, times(1)).send(anyString(), anyString());
+        verify(sender, times(1)).publish(any(CommandType.class), anyString(), anyString());
     }
 
     @Test
