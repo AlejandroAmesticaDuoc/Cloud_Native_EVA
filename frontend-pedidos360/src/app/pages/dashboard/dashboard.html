@@ -1,39 +1,184 @@
-<h1>Dashboard Pedidos360</h1>
+<div class="dashboard-page">
 
-@if (loading()) {
+  <header class="dashboard-header">
+    <div class="brand-area">
+      <div class="brand-logo">360</div>
 
-  <p>Conectando con Pedidos360...</p>
+      <div>
+        <h1>Pedidos<span>360</span></h1>
+        <p>Plataforma de gestión de pedidos</p>
+      </div>
+    </div>
 
-}
+    <div class="header-actions">
 
-@if (error()) {
+      <div class="status">
+        <span class="status-dot"></span>
+        Sesión activa
+      </div>
 
-  <p>{{ error() }}</p>
+      <button
+        type="button"
+        class="logout-button"
+        (click)="logout()">
+        Cerrar sesión
+      </button>
 
-}
+    </div>
+  </header>
 
-@if (user(); as currentUser) {
 
-  <h2>Sesión autenticada</h2>
+  <main class="dashboard-content">
 
-  <p>
-    <strong>Usuario:</strong>
-    {{ currentUser.username }}
-  </p>
+    <section class="welcome-section">
+      <span class="eyebrow">PANEL PRINCIPAL</span>
 
-  <p>
-    <strong>Nombre:</strong>
-    {{ currentUser.displayName }}
-  </p>
+      <h2>¿Qué quieres gestionar?</h2>
 
-  <p>
-    <strong>Roles:</strong>
-    {{ currentUser.roles.join(', ') }}
-  </p>
+      <p>
+        Accede a los distintos módulos y servicios de Pedidos360
+        desde un único lugar.
+      </p>
+    </section>
 
-  <p>
-    <strong>Scopes:</strong>
-    {{ currentUser.scopes.join(', ') }}
-  </p>
 
-}
+    <section class="modules-grid">
+
+      <!-- PEDIDOS -->
+
+      <a
+        routerLink="/orders"
+        class="module-card">
+
+        <div class="module-icon orders-icon">
+          📦
+        </div>
+
+        <div class="module-content">
+          <div class="module-title">
+            <h3>Pedidos</h3>
+            <span class="available-badge">Disponible</span>
+          </div>
+
+          <p>
+            Crea pedidos, consulta su información y administra
+            el ciclo completo de estados.
+          </p>
+
+          <div class="module-footer">
+            <span>ms-pedidos360-orders</span>
+            <strong>→</strong>
+          </div>
+        </div>
+
+      </a>
+
+
+      <!-- CATÁLOGO -->
+
+      <a
+        routerLink="/catalog"
+        class="module-card">
+
+        <div class="module-icon catalog-icon">
+          🛒
+        </div>
+
+        <div class="module-content">
+          <div class="module-title">
+            <h3>Catálogo</h3>
+            <span class="available-badge">Disponible</span>
+          </div>
+
+          <p>
+            Consulta productos, precios y stock disponible.
+            Los administradores pueden gestionar el catálogo.
+          </p>
+
+          <div class="module-footer">
+            <span>ms-pedidos360-catalog</span>
+            <strong>→</strong>
+          </div>
+        </div>
+
+      </a>
+
+
+      <!-- REPORTES -->
+
+      <div class="module-card disabled-card">
+
+        <div class="module-icon reports-icon">
+          📊
+        </div>
+
+        <div class="module-content">
+          <div class="module-title">
+            <h3>Reportes</h3>
+            <span class="pending-badge">En integración</span>
+          </div>
+
+          <p>
+            Consulta indicadores, estados activos y tiempos
+            de procesamiento de los pedidos.
+          </p>
+
+          <div class="module-footer">
+            <span>ms-pedidos360-report</span>
+          </div>
+        </div>
+
+      </div>
+
+
+      <!-- AUDITORÍA -->
+
+      <div class="module-card disabled-card">
+
+        <div class="module-icon audit-icon">
+          🛡️
+        </div>
+
+        <div class="module-content">
+          <div class="module-title">
+            <h3>Auditoría</h3>
+            <span class="pending-badge">En integración</span>
+          </div>
+
+          <p>
+            Revisa eventos, acciones realizadas y trazabilidad
+            completa de las operaciones.
+          </p>
+
+          <div class="module-footer">
+            <span>ms-pedidos360-audit</span>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <section class="architecture-card">
+
+      <div>
+        <span class="architecture-label">
+          ARQUITECTURA
+        </span>
+
+        <h3>Cloud Native Platform</h3>
+
+        <p>
+          Angular · Microsoft Entra ID · AWS API Gateway ·
+          Spring Boot · Kafka · RabbitMQ
+        </p>
+      </div>
+
+      <span class="cloud-icon">☁️</span>
+
+    </section>
+
+  </main>
+
+</div>

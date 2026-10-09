@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { MsalService } from '@azure/msal-angular';
 import { environment } from '../../../environments/environment';
 
@@ -8,15 +9,25 @@ import { environment } from '../../../environments/environment';
   templateUrl: './login.html',
   styleUrl: './login.css'
 })
-export class Login {
+export class Login implements OnInit {
 
-  constructor(private readonly msalService: MsalService) {}
+  constructor(
+    private readonly msalService: MsalService,
+    private readonly router: Router
+  ) {}
+
+  ngOnInit(): void {
+    if (this.msalService.instance.getActiveAccount()) {
+      this.router.navigateByUrl('/dashboard');
+    }
+  }
 
   login(): void {
     this.msalService.loginRedirect({
       scopes: [
         environment.msal.apiScope
-      ]
+      ],
+      redirectStartPage: `${window.location.origin}/dashboard`
     });
   }
 
