@@ -14,7 +14,12 @@ import cl.duoc.pedidos360.orders.dto.*;
 import cl.duoc.pedidos360.orders.entity.*;
 import cl.duoc.pedidos360.orders.exception.*;
 import cl.duoc.pedidos360.orders.repository.OrderRepository;
+import cl.duoc.pedidos360.orders.messaging.CommandType;
 import cl.duoc.pedidos360.orders.messaging.OrderEvent;
+import cl.duoc.pedidos360.orders.messaging.OutboxPublisher;
+import cl.duoc.pedidos360.orders.messaging.RabbitCommandPublisher;
+import java.util.Set;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -26,12 +31,14 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
 
 public abstract class OrdersApiContract {
     @Autowired protected MockMvc mvc;
     @Autowired protected OrderRepository repository;
     @Autowired protected JdbcTemplate jdbc;
     @Autowired protected JsonMapper json;
+    @Autowired protected PlatformTransactionManager transactionManager;
     @MockitoBean protected CatalogClient catalog;
 
     @BeforeEach
@@ -62,6 +69,132 @@ public abstract class OrdersApiContract {
     protected List<OrderEvent> events(long orderId) {
         return jdbc.query("SELECT payload FROM order_event_outbox WHERE order_id = ? ORDER BY aggregate_version",
                 (row, number) -> json.readValue(row.getString(1), OrderEvent.class), orderId);
+    }
+
+    /** Correos (normales y prioritarios) registrados en la outbox; los otros comandos se cuentan aparte. */
+    protected int emailCommands() {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox WHERE command_type IN ('EMAIL','EMAIL_PRIORITY')",
+                Integer.class);
+    }
+
+    protected List<String> commandTypes(long orderId) {
+        return jdbc.queryForList("SELECT command_type FROM notification_outbox WHERE order_id = ? ORDER BY id",
+                String.class, orderId);
+    }
+
+    protected JsonNode command(long orderId, CommandType type) {
+        return json.readTree(jdbc.queryForObject(
+                "SELECT payload FROM notification_outbox WHERE order_id = ? AND command_type = ?",
+                String.class, orderId, type.name()));
+    }
+
+    private static final Set<String> EMAIL_FIELDS = Set.of("schemaVersion", "eventId", "orderId", "customerId",
+            "status", "occurredAt", "traceId");
+    private static final Set<String> KITCHEN_FIELDS = Set.of("schemaVersion", "eventId", "orderId", "customerId",
+            "items", "occurredAt", "traceId");
+    private static final Set<String> INVOICE_FIELDS = Set.of("schemaVersion", "eventId", "orderId", "customerId",
+            "items", "total", "occurredAt", "traceId");
+
+    private void changeStatus(long id, OrderStatus target, String traceId) throws Exception {
+        mvc.perform(patch("/api/v1/orders/" + id + "/status").with(user("op", "OPERADOR")).header("X-Trace-Id", traceId)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"" + target + "\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void creationQueuesOnlyTheRegularEmailWithTheContractFields() throws Exception {
+        var result = mvc.perform(post("/api/v1/orders").with(user("ana", "CLIENTE")).header("X-Trace-Id", "email-cmd")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"customerId\":\"ana\",\"items\":[{\"productId\":10,\"quantity\":2}]}"))
+                .andExpect(status().isCreated()).andReturn();
+        long id = json.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+        assertEquals(List.of("EMAIL"), commandTypes(id));
+        var email = command(id, CommandType.EMAIL);
+        assertEquals(EMAIL_FIELDS, Set.copyOf(email.propertyNames()));
+        assertEquals(1, email.get("schemaVersion").asInt());
+        assertEquals(id, email.get("orderId").asLong());
+        assertEquals("ana", email.get("customerId").asString());
+        assertEquals("CREADO", email.get("status").asString());
+        assertEquals("email-cmd", email.get("traceId").asString());
+        assertNotNull(java.time.Instant.parse(email.get("occurredAt").asString()));
+        assertEquals(email.get("eventId").asString(), jdbc.queryForObject(
+                "SELECT event_id FROM notification_outbox WHERE order_id = ?", String.class, id));
+    }
+
+    @Test
+    void acceptanceQueuesEmailAndKitchenTicketWithTheOrderItems() throws Exception {
+        long id = order("ana", OrderStatus.CREADO).getId();
+        changeStatus(id, OrderStatus.ACEPTADO, "kitchen-cmd");
+        assertEquals(List.of("EMAIL", "KITCHEN_TICKET"), commandTypes(id));
+        var ticket = command(id, CommandType.KITCHEN_TICKET);
+        assertEquals(KITCHEN_FIELDS, Set.copyOf(ticket.propertyNames()));
+        assertEquals(id, ticket.get("orderId").asLong());
+        assertEquals("ana", ticket.get("customerId").asString());
+        assertEquals("kitchen-cmd", ticket.get("traceId").asString());
+        assertEquals(1, ticket.get("items").size());
+        assertEquals(Set.of("productId", "quantity"), Set.copyOf(ticket.get("items").get(0).propertyNames()));
+        assertEquals(10, ticket.get("items").get(0).get("productId").asLong());
+        assertEquals(2, ticket.get("items").get(0).get("quantity").asInt());
+        assertNotEquals(ticket.get("eventId"), command(id, CommandType.EMAIL).get("eventId"));
+    }
+
+    @Test
+    void deliveryQueuesEmailAndInvoiceWithHistoricPricesAndTotal() throws Exception {
+        long id = order("ana", OrderStatus.DESPACHADO).getId();
+        changeStatus(id, OrderStatus.ENTREGADO, "invoice-cmd");
+        assertEquals(List.of("EMAIL", "INVOICE"), commandTypes(id));
+        var invoice = command(id, CommandType.INVOICE);
+        assertEquals(INVOICE_FIELDS, Set.copyOf(invoice.propertyNames()));
+        assertEquals(0, new BigDecimal("2401.00").compareTo(invoice.get("total").decimalValue()));
+        var item = invoice.get("items").get(0);
+        assertEquals(Set.of("productId", "quantity", "unitPrice"), Set.copyOf(item.propertyNames()));
+        assertEquals(0, new BigDecimal("1200.50").compareTo(item.get("unitPrice").decimalValue()));
+        assertEquals(2, item.get("quantity").asInt());
+        assertEquals("invoice-cmd", invoice.get("traceId").asString());
+    }
+
+    @Test
+    void cancellationQueuesOnlyThePriorityEmail() throws Exception {
+        long id = order("ana", OrderStatus.CREADO).getId();
+        mvc.perform(post("/api/v1/orders/" + id + "/cancel").with(user("ana", "CLIENTE"))).andExpect(status().isNoContent());
+        assertEquals(List.of("EMAIL_PRIORITY"), commandTypes(id));
+        var email = command(id, CommandType.EMAIL_PRIORITY);
+        assertEquals(EMAIL_FIELDS, Set.copyOf(email.propertyNames()));
+        assertEquals("CANCELADO", email.get("status").asString());
+    }
+
+    @Test
+    void outboxPublishesEachRowWithItsCommandTypeInOrder() throws Exception {
+        long id = order("ana", OrderStatus.CREADO).getId();
+        changeStatus(id, OrderStatus.ACEPTADO, "outbox-order");
+        var sender = mock(RabbitCommandPublisher.class);
+        var publisher = new OutboxPublisher(jdbc, sender, transactionManager, 20);
+        publisher.publishNext();
+        publisher.publishNext();
+        publisher.publishNext();
+        var order = inOrder(sender);
+        order.verify(sender).publish(eq(CommandType.EMAIL), anyString(), contains("\"status\":\"ACEPTADO\""));
+        order.verify(sender).publish(eq(CommandType.KITCHEN_TICKET), anyString(), contains("\"items\""));
+        verifyNoMoreInteractions(sender);
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox WHERE published_at IS NULL", Integer.class));
+    }
+
+    // Con max-attempts=1 el primer fallo agota los intentos (el caso con espera entre intentos está en OrdersPostgresIT).
+    @Test
+    void outboxMarksTheRowAsFailedWhenAttemptsAreExhaustedAndIgnoresIt() throws Exception {
+        long id = order("ana", OrderStatus.CREADO).getId();
+        mvc.perform(post("/api/v1/orders/" + id + "/cancel").with(user("ana", "CLIENTE"))).andExpect(status().isNoContent());
+        String eventId = jdbc.queryForObject("SELECT event_id FROM notification_outbox", String.class);
+        var sender = mock(RabbitCommandPublisher.class);
+        doThrow(new IllegalStateException("broker caído")).when(sender).publish(any(), anyString(), anyString());
+        var publisher = new OutboxPublisher(jdbc, sender, transactionManager, 1);
+        publisher.publishNext();
+        assertEquals(1, jdbc.queryForObject("SELECT attempts FROM notification_outbox", Integer.class));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox WHERE failed_at IS NOT NULL", Integer.class));
+        publisher.publishNext();
+        verify(sender, times(1)).publish(eq(CommandType.EMAIL_PRIORITY), eq(eventId), anyString());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox WHERE published_at IS NULL", Integer.class));
+        assertThrows(IllegalArgumentException.class, () -> new OutboxPublisher(jdbc, sender, transactionManager, 0));
     }
 
     @Test
@@ -147,7 +280,7 @@ public abstract class OrdersApiContract {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"ADMIN", "AUDITOR"})
+    @ValueSource(strings = {"AUDITOR", "OTRO"})
     void doesNotAllowTheseRolesToCreate(String role) throws Exception {
         mvc.perform(post("/api/v1/orders").with(user("ana", role)).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"customerId\":\"ana\",\"items\":[{\"productId\":10,\"quantity\":2}]}"))
@@ -165,7 +298,8 @@ public abstract class OrdersApiContract {
                 .andExpect(jsonPath("$.total").value(3601.50)).andExpect(jsonPath("$.createdAt").exists())
                 .andExpect(jsonPath("$.version").doesNotExist()).andExpect(jsonPath("$.pendingStatus").doesNotExist());
         assertEquals(1, repository.count());
-        String payload = jdbc.queryForObject("SELECT payload FROM notification_outbox", String.class);
+        String payload = jdbc.queryForObject("SELECT payload FROM notification_outbox WHERE command_type = 'EMAIL'",
+                String.class);
         assertNotNull(payload);
         assertTrue(payload.contains("\"status\":\"CREADO\""));
         assertTrue(payload.contains("\"traceId\":\"orders-test\""));
@@ -300,7 +434,7 @@ public abstract class OrdersApiContract {
         }
         verifyNoInteractions(catalog);
         assertEquals(OrderStatus.CANCELADO, repository.findById(id).orElseThrow().getStatus());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
+        assertEquals(1, emailCommands());
     }
 
     @Test
@@ -311,7 +445,8 @@ public abstract class OrdersApiContract {
                     .andExpect(status().isNoContent());
         }
         verify(catalog, times(1)).release(eq(id), anyString());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Integer.class));
+        assertEquals(1, emailCommands());
+        assertEquals(List.of("EMAIL_PRIORITY"), commandTypes(id));
     }
 
     @Test

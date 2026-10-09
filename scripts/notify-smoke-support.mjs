@@ -47,7 +47,8 @@ export function notificationHarness({ dockerCommand, launch, ready, stop, waitFo
 
   async function publish(payload) {
     const response = await rabbitApi('/api/exchanges/pedidos360/amq.default/publish', 'POST', {
-      properties: { content_type: 'application/json', delivery_mode: 2, message_id: randomUUID() },
+      // Como Orders: messageId = eventId (Notify rechaza mensajes donde no coinciden).
+      properties: { content_type: 'application/json', delivery_mode: 2, message_id: payload.eventId ?? randomUUID() },
       routing_key: 'q.cmd.email', payload: JSON.stringify(payload), payload_encoding: 'string'
     });
     assert.equal(response.routed, true);
@@ -91,7 +92,7 @@ export function notificationHarness({ dockerCommand, launch, ready, stop, waitFo
     console.log('Comprobando correos, recuperación del broker y cola de fallidos...');
     await waitFor(async () => await sql('orders',
       'SELECT COUNT(*) FROM notification_outbox WHERE published_at IS NULL') === '0', 'publicación de avisos');
-    const count = Number(await sql('orders', 'SELECT COUNT(*) FROM notification_outbox'));
+    const count = Number(await sql('orders', "SELECT COUNT(*) FROM notification_outbox WHERE command_type IN ('EMAIL', 'EMAIL_PRIORITY')"));
     await waitFor(async () => (await messages()).length === count, 'recepción SMTP');
     const delivered = await messages();
     const completed = delivered.find(mail => mail.Subject.includes('ENTREGADO'));
@@ -101,7 +102,7 @@ export function notificationHarness({ dockerCommand, launch, ready, stop, waitFo
     assert.ok(detail.Text.includes('Seguimiento: integration-catalog-001'));
     assert.equal(detail.To[0].Address, 'demo@pedidos360.test');
     assert.equal(detail.Text.includes('Bearer'), false);
-    const duplicate = await sql('orders', "SELECT COUNT(*) FROM (SELECT order_id, payload::jsonb->>'status' FROM notification_outbox GROUP BY order_id, payload::jsonb->>'status' HAVING COUNT(*) > 1) duplicates");
+    const duplicate = await sql('orders', "SELECT COUNT(*) FROM (SELECT order_id, payload::jsonb->>'status' FROM notification_outbox WHERE command_type IN ('EMAIL', 'EMAIL_PRIORITY') GROUP BY order_id, payload::jsonb->>'status' HAVING COUNT(*) > 1) duplicates");
     assert.equal(duplicate, '0');
     assertions += 6;
 

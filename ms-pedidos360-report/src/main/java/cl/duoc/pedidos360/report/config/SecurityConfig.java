@@ -40,7 +40,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
                                 "/v3/api-docs.yaml", "/swagger-ui.html", "/swagger-ui/**")
                         .access((authentication, context) -> new AuthorizationDecision(docsEnabled))
-                        .requestMatchers(HttpMethod.GET, "/api/v1/reports/summary", "/api/v1/reports/lead-time")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/reports/summary", "/api/v1/reports/lead-time",
+                                "/api/v1/reports/invoices/{orderId}")
                         .access(scopeAndRole("ADMIN"))
                         .anyRequest().denyAll())
                 .exceptionHandling(errorsConfig -> errorsConfig.authenticationEntryPoint(errors).accessDeniedHandler(errors))

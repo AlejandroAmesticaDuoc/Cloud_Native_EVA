@@ -9,7 +9,9 @@ import java.util.*;
 import java.util.concurrent.*;
 import cl.duoc.pedidos360.audit.messaging.EventParserTest;
 import cl.duoc.pedidos360.audit.security.support.TestJwtIssuer;
+import cl.duoc.pedidos360.audit.dto.DeadLetter;
 import cl.duoc.pedidos360.audit.service.AuditStore;
+import cl.duoc.pedidos360.audit.service.DeadLetterStore;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,6 +42,7 @@ class AuditPostgresIT {
                     "/docker-entrypoint-initdb.d/003-create-audit.sh");
 
     @Autowired AuditStore store;
+    @Autowired DeadLetterStore deadLetters;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
     @Autowired PlatformTransactionManager manager;
@@ -59,6 +62,60 @@ class AuditPostgresIT {
     void clear() {
         jdbc.update("DELETE FROM audit_events");
         jdbc.update("DELETE FROM audit_rejections");
+        jdbc.update("DELETE FROM audit_dead_letters");
+    }
+
+    DeadLetter deadLetter(String messageId, String queue, long count, String payload) {
+        return new DeadLetter(messageId, queue, "rejected", count, "cmd.direct", "email.send",
+                "email.send", "order-42", "trace-demo-001", payload, "a".repeat(64), payload == null ? 70000 : payload.length(),
+                Instant.parse("2026-10-08T15:31:00Z"));
+    }
+
+    @Test
+    void recordsEachDeadLetterOnceButKeepsLaterRejectionsAfterReplay() {
+        assertTrue(deadLetters.record(deadLetter("event-1", "q.cmd.email", 1, "{}")));
+        assertFalse(deadLetters.record(deadLetter("event-1", "q.cmd.email", 1, "{}")));
+        assertTrue(deadLetters.record(deadLetter("event-1", "q.cmd.email", 2, "{}")));
+        assertTrue(deadLetters.record(deadLetter("event-1", "q.cmd.kitchen", 1, null)));
+        assertEquals(3, count("audit_dead_letters"));
+        var page = deadLetters.find(0, 2);
+        assertEquals(2, page.items().size());
+        assertNotNull(page.nextAfterId());
+        var last = deadLetters.find(page.nextAfterId(), 2);
+        assertEquals(1, last.items().size());
+        assertNull(last.nextAfterId());
+        var oversized = last.items().getFirst();
+        assertEquals("q.cmd.kitchen", oversized.sourceQueue());
+        assertNull(oversized.payload());
+        assertEquals(70000, oversized.payloadBytes());
+        assertEquals(Instant.parse("2026-10-08T15:31:00Z"), oversized.firstDeathAt());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ADMIN", "AUDITOR"})
+    void exposesDeadLettersToAdministratorsAndAuditors(String role) throws Exception {
+        deadLetters.record(deadLetter("event-9", "q.cmd.email", 1, "{\"orderId\":42}"));
+        mvc.perform(get("/api/v1/audit/dead-letters").param("afterId", "0").param("size", "50")
+                .header("Authorization", "Bearer " + token(role)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].messageId").value("event-9"))
+                .andExpect(jsonPath("$.items[0].sourceQueue").value("q.cmd.email"))
+                .andExpect(jsonPath("$.items[0].reason").value("rejected"))
+                .andExpect(jsonPath("$.items[0].deathCount").value(1))
+                .andExpect(jsonPath("$.items[0].payload").value("{\"orderId\":42}"))
+                .andExpect(jsonPath("$.nextAfterId").doesNotExist());
+    }
+
+    @Test
+    void protectsAndValidatesTheDeadLetterQuery() throws Exception {
+        mvc.perform(get("/api/v1/audit/dead-letters")).andExpect(status().isUnauthorized());
+        for (String role : List.of("CLIENTE", "OPERADOR")) {
+            mvc.perform(get("/api/v1/audit/dead-letters").header("Authorization", "Bearer " + token(role)))
+                    .andExpect(status().isForbidden());
+        }
+        for (String query : List.of("?afterId=-1", "?size=0", "?size=101")) {
+            mvc.perform(get("/api/v1/audit/dead-letters" + query).header("Authorization", "Bearer " + token("AUDITOR")))
+                    .andExpect(status().isBadRequest());
+        }
     }
 
     String created(long order) { return EventParserTest.event(order, 1, "OrderCreated", null, "CREADO"); }
