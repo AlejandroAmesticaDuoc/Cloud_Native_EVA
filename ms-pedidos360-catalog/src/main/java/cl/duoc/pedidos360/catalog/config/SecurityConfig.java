@@ -41,6 +41,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
                                 "/v3/api-docs.yaml", "/swagger-ui.html", "/swagger-ui/**")
                         .access((authentication, context) -> new AuthorizationDecision(docsEnabled))
+                        .requestMatchers(HttpMethod.GET, "/api/v1/catalog/kitchen-tickets/{orderId}")
+                        .access(scopeAndRole("ADMIN", "OPERADOR"))
                         .requestMatchers(HttpMethod.GET, "/api/v1/catalog", "/api/v1/catalog/{id}")
                         .hasAuthority(SCOPE)
                         .requestMatchers(HttpMethod.POST, "/api/v1/catalog").access(scopeAndRole("ADMIN"))

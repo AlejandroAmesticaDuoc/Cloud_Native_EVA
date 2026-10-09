@@ -18,7 +18,7 @@ En esta primera etapa nos enfocaremos principalmente en implementar la autentica
 - La infraestructura principal estará en AWS.
 - La base de datos será PostgreSQL. Primero se ejecutará localmente en Docker y luego se definirá su alojamiento en AWS.
 - Se implementará el rol `AUDITOR`.
-- RabbitMQ y Kafka tendrán inicialmente un alcance básico y se ampliarán más adelante.
+- RabbitMQ y Kafka tendrán inicialmente un alcance básico y se ampliarán más adelante. En la EP3 RabbitMQ se amplió con comandos de correo, tickets de cocina y boletas, DLQ, auditoría y un microservicio administrador ([RabbitMQ en Pedidos360](docs/RABBITMQ.md)).
 - El BFF volverá a validar el JWT aunque API Gateway ya lo haya validado.
 
 ## Arquitectura general
@@ -95,6 +95,7 @@ pedidos360/
 ├── ms-pedidos360-notify/
 ├── ms-pedidos360-report/
 ├── ms-pedidos360-audit/
+├── ms-pedidos360-mq-admin/
 ├── infra/
 │   ├── apps/
 │   ├── mq/
@@ -150,7 +151,9 @@ La autorización será aplicada tanto en el frontend como en el backend. La vali
 - [Estado y ejecución de Catalog](ms-pedidos360-catalog/README.md)
 - [Contrato de Catalog, stock interno y pruebas con el BFF](docs/CATALOG_COMPLETO.md)
 - [Orders, estados, stock e identidad técnica](docs/ORDERS_COMPLETO.md)
+- [RabbitMQ en Pedidos360: topología, DLQ, mq-admin y demostración EP3](docs/RABBITMQ.md)
 - [RabbitMQ, Notify y correo local](docs/NOTIFY_RABBITMQ.md)
+- [Administrador de RabbitMQ (mq-admin)](ms-pedidos360-mq-admin/README.md)
 - [Kafka y contrato de eventos](docs/KAFKA_EVENTOS.md)
 - [Audit, historial y consultas protegidas](docs/AUDIT_COMPLETO.md)
 - [Report, ventas por hora y tiempos de entrega](docs/REPORT_COMPLETO.md)
@@ -161,9 +164,34 @@ Se decidió utilizar PostgreSQL por los problemas para habilitar la cuenta del p
 
 Catalog cuenta con CRUD, validaciones, JWT y stock transaccional. Orders crea y consulta pedidos, verifica propiedad, aplica estados y coordina descuentos y devoluciones con una identidad de servicio. Se verificó BFF → Orders → Catalog → PostgreSQL, incluyendo reintentos después de una respuesta perdida y un reinicio. Orders también publica avisos en RabbitMQ y eventos en Kafka mediante registros pendientes en su base. Notify envía los avisos por SMTP a un buzón local de demostración. Audit conserva el historial para ADMIN y AUDITOR. Report procesa Kafka con otro grupo, mantiene su propia base y entrega a ADMIN el resumen de estados, montos entregados por hora y lead time. Siguen pendientes las pruebas con frontend, Entra real y AWS.
 
-El archivo `compose.postgres.yml` inicia la base de Catalog. Al combinarlo con `compose.catalog.yml` se agregan Catalog y BFF; `compose.orders.yml` incorpora Orders y su propia base. `compose.notify.yml` agrega RabbitMQ, Notify y Mailpit; `compose.kafka.yml` incorpora Kafka y el inicializador del tópico. `compose.audit.yml` y `compose.report.yml` añaden sus servicios y bases PostgreSQL. Usar los siete archivos con `-f` en un solo comando para la solución local completa del backend. No despliegan en AWS. H2 se utiliza solamente en tests; las integraciones utilizan PostgreSQL real con Docker.
+El archivo `compose.postgres.yml` inicia la base de Catalog. Al combinarlo con `compose.catalog.yml` se agregan Catalog y BFF; `compose.orders.yml` incorpora Orders y su propia base. `compose.rabbitmq.yml` agrega RabbitMQ y mq-admin (y se puede levantar solo); `compose.notify.yml` agrega Notify y Mailpit y se usa junto a `compose.rabbitmq.yml`; `compose.kafka.yml` incorpora Kafka y el inicializador del tópico. `compose.audit.yml` y `compose.report.yml` añaden sus servicios y bases PostgreSQL, y `compose.commands.yml` activa los consumidores RabbitMQ de Catalog, Report y Audit. Usar los nueve archivos con `-f`, en ese orden y en un solo comando, para la solución local completa del backend (ver la sección RabbitMQ). No despliegan en AWS. H2 se utiliza solamente en tests; las integraciones utilizan PostgreSQL real con Docker.
 
 El proyecto activo está en la raíz. La carpeta `CloudNative` conserva una copia antigua del trabajo del equipo, no es una segunda configuración vigente y no debe usarse para ejecutar estos pasos.
+
+## Servicios y puertos locales
+
+| Servicio | Puerto | Responsabilidad |
+|---|---|---|
+| Frontend | 4200 | Angular con MSAL |
+| BFF | 8080 | Entrada del backend, revalida el JWT |
+| Orders | 8081 | Pedidos, estados y outbox de comandos RabbitMQ y eventos Kafka |
+| Catalog | 8082 | Productos, stock y tickets de cocina (consume `q.cmd.kitchen`) |
+| Notify | 8083 | Correos (consume `q.cmd.email`) |
+| Report | 8084 | Reportería y boletas (consume `q.cmd.invoice`) |
+| Audit | 8085 | Historial y auditoría de dead letters (consume `q.audit.dead-letters`) |
+| mq-admin | 8086 | Administrador de RabbitMQ: colas, exchanges, bindings, DLQ y replay (rol ADMIN) |
+| RabbitMQ | 5672 / 15672 | Broker AMQP / consola de management |
+
+## RabbitMQ (EP3)
+
+Orders publica comandos asíncronos (correo, ticket de cocina, boleta) en los exchanges `cmd.direct` y `cmd.topic`; Notify, Catalog y Report los consumen con ACK manual, reintentos acotados y DLQ (`cmd.dead.dlx`); Audit registra cada dead letter y mq-admin permite crear y eliminar colas, exchanges y bindings, vigilar las DLQ y reprocesarlas. Todo está documentado en [docs/RABBITMQ.md](docs/RABBITMQ.md), incluida la tabla de la rúbrica.
+
+```powershell
+# Solo RabbitMQ + mq-admin
+docker compose -f compose.rabbitmq.yml up -d --build
+# Solución completa del backend (el orden de los -f importa)
+docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml up -d --build
+```
 
 ## Reglas principales
 

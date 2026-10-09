@@ -1,0 +1,53 @@
+# RabbitMQ (broker de mensajería de Pedidos360) + mq-admin (administrador REST de colas, exchanges,
+# bindings y DLQ). Se puede levantar solo:
+#   docker compose --env-file .env -f compose.rabbitmq.yml up -d --build
+# En la solución completa va antes de compose.notify.yml; el orden de todos los archivos está en
+# docs/RABBITMQ.md. La topología (exchanges, colas, DLQ y bindings) la declara cada microservicio.
+name: pedidos360-local
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.3.5-management-alpine
+    hostname: pedidos360-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+    ports:
+      # Disponibles solo en este computador, no en todas las interfaces de red.
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  mq-admin:
+    build: ./ms-pedidos360-mq-admin
+    environment:
+      MQ_ADMIN_PORT: 8086
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+      RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
+      RABBITMQ_EMAIL_QUEUE: ${RABBITMQ_EMAIL_QUEUE:-q.cmd.email}
+      RABBITMQ_EMAIL_DLQ: ${RABBITMQ_EMAIL_DLQ:-q.cmd.email.dlq}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define el emisor real de Entra ID}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define la audiencia real de la API}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      MQ_ADMIN_ALERT_THRESHOLD: ${MQ_ADMIN_ALERT_THRESHOLD:-1}
+      MQ_ADMIN_ALERT_INTERVAL: ${MQ_ADMIN_ALERT_INTERVAL:-30s}
+    ports:
+      - "127.0.0.1:${MQ_ADMIN_PORT:-8086}:8086"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  rabbitmq_data:

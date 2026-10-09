@@ -10,7 +10,6 @@ import cl.duoc.pedidos360.orders.entity.*;
 import cl.duoc.pedidos360.orders.exception.*;
 import cl.duoc.pedidos360.orders.repository.OrderRepository;
 import cl.duoc.pedidos360.orders.security.CurrentUser;
-import cl.duoc.pedidos360.orders.messaging.NotificationOutbox;
 import cl.duoc.pedidos360.orders.messaging.OrderEventOutbox;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -23,14 +22,14 @@ public class OrdersService {
     private final OrderRepository repository;
     private final CatalogClient catalog;
     private final TransactionTemplate transactions;
-    private final NotificationOutbox notifications;
+    private final OrderCommands commands;
     private final OrderEventOutbox events;
 
     public OrdersService(OrderRepository repository, CatalogClient catalog, PlatformTransactionManager manager,
-            NotificationOutbox notifications, OrderEventOutbox events) {
+            OrderCommands commands, OrderEventOutbox events) {
         this.repository = repository;
         this.catalog = catalog;
-        this.notifications = notifications;
+        this.commands = commands;
         this.events = events;
         transactions = new TransactionTemplate(manager);
         transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -137,7 +136,7 @@ public class OrdersService {
     }
 
     private void recordEvents(PurchaseOrder order, OrderStatus previous, CurrentUser user, String traceId) {
-        notifications.enqueue(order, traceId);
+        commands.enqueue(order, OrderCommandPolicy.commandsFor(previous, order.getStatus()), traceId);
         events.enqueue(order, previous, user.id(), traceId);
     }
 

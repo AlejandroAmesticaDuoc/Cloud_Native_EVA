@@ -41,6 +41,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return response(HttpStatus.NOT_FOUND, exception.getMessage(), request);
     }
 
+    @ExceptionHandler(KitchenTicketNotFoundException.class)
+    ResponseEntity<Object> ticketNotFound(KitchenTicketNotFoundException exception, HttpServletRequest request) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
     @ExceptionHandler(StockConflictException.class)
     ResponseEntity<Object> stockConflict(StockConflictException exception, HttpServletRequest request) {
         if (exception instanceof InsufficientStockException) {
