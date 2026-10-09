@@ -1,17 +1,21 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { MsalService } from '@azure/msal-angular';
 
 import { AuthApiService } from '../../core/services/auth-api.service';
 import { AuthenticatedUser } from '../../core/models/authenticated-user.model';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [],
+  imports: [RouterLink],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css'
 })
 export class Dashboard implements OnInit {
 
   private readonly authApi = inject(AuthApiService);
+
+  private readonly msalService = inject(MsalService);
 
   user = signal<AuthenticatedUser | null>(null);
 
@@ -47,6 +51,12 @@ export class Dashboard implements OnInit {
 
         this.loading.set(false);
       }
+    });
+  }
+
+  logout(): void {
+    this.msalService.logoutRedirect({
+      postLogoutRedirectUri: `${window.location.origin}/login`
     });
   }
 }
