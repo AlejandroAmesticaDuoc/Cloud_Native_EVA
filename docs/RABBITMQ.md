@@ -24,7 +24,7 @@ Ajustes documentados respecto de la "Topología RabbitMQ (ejemplo)" del caso: lo
 
 ## 2. Topología
 
-Broker: `rabbitmq:4.3.5-management-alpine`, vhost `pedidos360`, un nodo. Exchanges durables, sin autoeliminación ni argumentos.
+Broker: `rabbitmq:4.3.5-management-alpine`, vhost `pedidos360`, clúster `pedidos360` de dos nodos (ver 2.1). Exchanges durables, sin autoeliminación ni argumentos.
 
 | Exchange | Tipo | Uso |
 |---|---|---|
@@ -97,6 +97,30 @@ Quién declara qué (cada declaración es un `@Bean` individual de `Queue`, `Exc
 - **mq-admin**: no declara topología propia; la administra por API.
 
 Los argumentos deben ser idénticos en valor **y tipo** en todos los servicios (`x-max-length` Long, `x-message-ttl` Integer); si difieren, RabbitMQ responde `406 PRECONDITION_FAILED`.
+
+### 2.1 Clúster de dos nodos
+
+`compose.rabbitmq.yml` levanta dos nodos que forman el clúster `pedidos360`:
+
+| Servicio | Nodo | Consola local |
+|---|---|---|
+| `rabbitmq` | `rabbit@pedidos360-rabbitmq` | `http://localhost:15672` |
+| `rabbitmq-2` | `rabbit@pedidos360-rabbitmq-2` | `http://localhost:15673` |
+
+- **Formación.** `infra/rabbitmq/20-cluster.conf` (montado en `/etc/rabbitmq/conf.d`) usa peer discovery `classic_config` con la lista de ambos nodos. El nodo 2 arranca cuando el nodo 1 está sano y se une a él; su healthcheck solo pasa cuando ya pertenece al clúster. Al reiniciar, cada nodo vuelve a su clúster sin pasos manuales.
+- **Erlang cookie.** Ambos nodos deben usar el mismo cookie, que es secreto y no se guarda en Git. No requiere configuración: el primer nodo que arranca genera uno aleatorio (48 caracteres) en el volumen compartido `rabbitmq_cookie` (`/var/lib/rabbitmq-cluster`, solo legible por root) y cada nodo lo copia a `/var/lib/rabbitmq/.erlang.cookie` antes de iniciar. El cookie se conserva entre reinicios mientras exista el volumen. `RABBITMQ_CLUSTER_COOKIE` es opcional: si se define en `.env`, reemplaza al generado (útil si los nodos corrieran en máquinas distintas). La imagen 4.3 no acepta la variable `RABBITMQ_ERLANG_COOKIE` (el nodo falla con `eacces` al leer el cookie), por eso el entrypoint del compose escribe el archivo.
+- **Qué se comparte.** Usuarios, vhost, exchanges, colas, bindings y políticas existen en todo el clúster y se ven desde cualquiera de las dos consolas. Las colas son *classic*: sus mensajes viven en el nodo donde se declararon (el nodo 1, al que se conectan los microservicios). Para replicar los mensajes habría que migrarlas a colas *quorum*, lo que exige cambiar `x-queue-type` en todos los servicios y recrear las colas.
+- **Disponibilidad.** RabbitMQ 4.3 guarda los metadatos en Khepri (Raft), que necesita mayoría: con dos nodos, **ambos** deben estar activos para crear, modificar o eliminar colas, exchanges o bindings. Con un nodo detenido las consultas siguen funcionando, pero las declaraciones fallan con `metadata store operation timed out` (los microservicios declaran su topología al conectar y mq-admin devuelve error al crear o eliminar recursos). Por eso no se debe detener un solo nodo; para tolerar la caída de uno, el clúster necesita tres nodos.
+- **Red.** Los puertos de clúster (4369 epmd y 25672 de distribución Erlang) no se publican: los nodos se comunican solo por la red interna de Docker.
+
+Verificación:
+
+```powershell
+docker compose -f compose.rabbitmq.yml exec rabbitmq rabbitmqctl cluster_status   # Running Nodes: los dos nodos
+docker compose -f compose.rabbitmq.yml exec rabbitmq-2 rabbitmqctl list_queues -p pedidos360 name type
+```
+
+En la consola de management, **Overview › Nodes** muestra los dos nodos en verde y el nombre del clúster arriba a la derecha.
 
 ## 3. Propiedades centralizadas
 
@@ -261,14 +285,14 @@ Replay (`POST /dead-letter-queues/{name}/replay`, solo DLQ configuradas): por ca
 
 ## 10. Levantar con Docker Compose
 
-Requisitos: Docker Desktop con contenedores Linux y un `.env` en la raíz (copiar `.env.example` y reemplazar marcadores; nunca subirlo a Git). Variables obligatorias para RabbitMQ: `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`; para los servicios Java: `JWT_ISSUER_URI`, `JWT_AUDIENCE` y las contraseñas de PostgreSQL (`POSTGRES_ADMIN_PASSWORD`, `CATALOG_DB_PASSWORD`, `ORDERS_DB_PASSWORD`, `AUDIT_DB_PASSWORD`, `REPORT_DB_PASSWORD`).
+Requisitos: Docker Desktop con contenedores Linux y un `.env` en la raíz (copiar `.env.example` y reemplazar marcadores; nunca subirlo a Git). Variables obligatorias para RabbitMQ: `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD` (el Erlang cookie del clúster se genera solo, ver 2.1); para los servicios Java: `JWT_ISSUER_URI`, `JWT_AUDIENCE` y las contraseñas de PostgreSQL (`POSTGRES_ADMIN_PASSWORD`, `CATALOG_DB_PASSWORD`, `ORDERS_DB_PASSWORD`, `AUDIT_DB_PASSWORD`, `REPORT_DB_PASSWORD`).
 
 | Archivo | Aporta |
 |---|---|
 | `compose.postgres.yml` | PostgreSQL de Catalog (proyecto `pedidos360-local`, igual que `compose.rabbitmq.yml`) |
 | `compose.catalog.yml` | Catalog y BFF |
 | `compose.orders.yml` | Orders y su PostgreSQL |
-| `compose.rabbitmq.yml` | **RabbitMQ y mq-admin**; se puede levantar solo |
+| `compose.rabbitmq.yml` | **RabbitMQ (clúster de dos nodos) y mq-admin**; se puede levantar solo |
 | `compose.notify.yml` | Notify, Mailpit y la publicación de Orders (usar junto a `compose.rabbitmq.yml`) |
 | `compose.kafka.yml` | Kafka KRaft y el inicializador del tópico |
 | `compose.audit.yml` / `compose.report.yml` | Audit y Report con sus bases |
@@ -282,7 +306,7 @@ docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.
 docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml ps
 ```
 
-Son 15 servicios: 14 contenedores activos y el inicializador de Kafka, que termina con código 0.
+Son 16 servicios: 15 contenedores activos (entre ellos los dos nodos de RabbitMQ) y el inicializador de Kafka, que termina con código 0.
 
 Solo RabbitMQ y mq-admin:
 
@@ -295,7 +319,8 @@ Detener sin borrar datos: el mismo comando con `stop`. No usar `down -v` en desa
 
 | Dirección local | Uso |
 |---|---|
-| `http://localhost:15672` | Consola de RabbitMQ (usuario y clave de `.env`) |
+| `http://localhost:15672` | Consola de RabbitMQ, nodo 1 (usuario y clave de `.env`) |
+| `http://localhost:15673` | Consola de RabbitMQ, nodo 2 |
 | `http://localhost:8086` | mq-admin |
 | `http://localhost:8025` | Mailpit (correos) |
 | `http://localhost:8080` | BFF |
@@ -316,7 +341,7 @@ function Api($method, $url, $token, $body) {
 $compose = '-f','compose.postgres.yml','-f','compose.catalog.yml','-f','compose.orders.yml','-f','compose.rabbitmq.yml','-f','compose.notify.yml','-f','compose.kafka.yml','-f','compose.audit.yml','-f','compose.report.yml','-f','compose.commands.yml'
 ```
 
-1. **Topología.** Abrir `http://localhost:15672` (Exchanges y Queues) o consultar mq-admin:
+1. **Clúster y topología.** `docker compose @compose exec rabbitmq rabbitmqctl cluster_status` (dos Running Nodes) o la consola en Overview › Nodes. Luego abrir `http://localhost:15672` (Exchanges y Queues) o consultar mq-admin:
    `Api GET http://localhost:8086/api/v1/mq-admin/bindings?exchange=cmd.dead.dlx $admin`
 2. **Crear pedido** (correo `CREADO`): `$p = Api POST http://localhost:8080/api/v1/orders $cliente @{ items = @(@{ productId = 1; quantity = 2 }) }`. Revisar Mailpit (`http://localhost:8025`).
 3. **Aceptarlo** (correo + ticket de cocina): `Api PATCH "http://localhost:8080/api/v1/orders/$($p.id)/status" $operador @{ status = 'ACEPTADO' }`. Requiere la identidad técnica de Orders configurada en Entra para descontar stock ([Orders](ORDERS_COMPLETO.md)).
@@ -364,6 +389,10 @@ $compose = '-f','compose.postgres.yml','-f','compose.catalog.yml','-f','compose.
     El correo `CREADO` llega a Mailpit. Reprocesar el mensaje inválido del paso 8 lo devuelve a `q.cmd.kitchen`, Catalog lo vuelve a rechazar y regresa a la DLQ: el veneno no entra en un bucle. Para descartarlo después de revisarlo: `Api DELETE "$mq/queues/q.cmd.kitchen.dlq/messages" $admin`.
 
 ## 12. Nota de migración (volumen `rabbitmq_data` existente)
+
+**Paso de un nodo a clúster.** Un broker de un solo nodo pasa al clúster sin perder datos: el nodo 1 conserva su nombre (`rabbit@pedidos360-rabbitmq`) y su volumen, y el nodo 2 se une con un volumen nuevo (`rabbitmq_2_data`). Basta con actualizar el repositorio y repetir el `up -d` habitual, sin cambios en `.env`: Docker recrea el nodo 1 con el cookie compartido (generado en ese momento) y luego inicia el nodo 2. Verificar con `rabbitmqctl cluster_status` (sección 2.1).
+
+**Topología de la EP2.**
 
 Hasta la EP2, Notify declaraba `q.cmd.email` con DLX por el exchange por defecto y `q.cmd.email.dlq` sin argumentos. Si el volumen `pedidos360-local_rabbitmq_data` ya existe, al iniciar la nueva topología RabbitMQ responde `406 PRECONDITION_FAILED - inequivalent arg ...` y Orders/Notify no arrancan su mensajería. Hay dos salidas (en desarrollo; los mensajes pendientes de esas colas se pierden). `$compose` es la lista de archivos definida en la sección 11:
 

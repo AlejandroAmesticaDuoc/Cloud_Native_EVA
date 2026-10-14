@@ -1,2 +1,4 @@
 # Los scripts de inicialización se ejecutan dentro de un contenedor Linux.
 *.sh text eol=lf
+# La configuración de RabbitMQ se monta en contenedores Linux.
+infra/rabbitmq/*.conf text eol=lf

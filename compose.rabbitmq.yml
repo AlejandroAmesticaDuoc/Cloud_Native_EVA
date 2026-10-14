@@ -1,29 +1,85 @@
-# RabbitMQ (broker de mensajería de Pedidos360) + mq-admin (administrador REST de colas, exchanges,
-# bindings y DLQ). Se puede levantar solo:
+# RabbitMQ (broker de mensajería de Pedidos360, clúster de dos nodos) + mq-admin (administrador REST
+# de colas, exchanges, bindings y DLQ). Se puede levantar solo:
 #   docker compose --env-file .env -f compose.rabbitmq.yml up -d --build
 # En la solución completa va antes de compose.notify.yml; el orden de todos los archivos está en
 # docs/RABBITMQ.md. La topología (exchanges, colas, DLQ y bindings) la declara cada microservicio.
 name: pedidos360-local
 
+# Configuración común de los dos nodos. El Erlang cookie debe ser idéntico en ambos para que formen
+# el clúster y no se guarda en Git: el primer nodo que arranca genera uno aleatorio en el volumen
+# compartido rabbitmq_cookie (solo legible por root) y ambos lo copian a su directorio antes de
+# iniciar. RABBITMQ_CLUSTER_COOKIE es opcional y, si se define, lo reemplaza. La imagen 4.3 no acepta
+# RABBITMQ_ERLANG_COOKIE (el nodo falla al leer el cookie), por eso se escribe el archivo; el
+# entrypoint de la imagen le asigna el dueño rabbitmq.
+x-rabbitmq-node: &rabbitmq-node
+  image: rabbitmq:4.3.5-management-alpine
+  entrypoint:
+    - sh
+    - -ec
+    - |
+      umask 077
+      shared=/var/lib/rabbitmq-cluster/.erlang.cookie
+      if [ -n "$${RABBITMQ_CLUSTER_COOKIE:-}" ]; then
+        printf '%s' "$$RABBITMQ_CLUSTER_COOKIE" > "$$shared"
+      elif [ ! -s "$$shared" ]; then
+        rm -f "$$shared"
+        (set -C; tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48 > "$$shared") 2>/dev/null || true
+      fi
+      cp "$$shared" /var/lib/rabbitmq/.erlang.cookie
+      exec docker-entrypoint.sh rabbitmq-server
+  environment:
+    RABBITMQ_CLUSTER_COOKIE: ${RABBITMQ_CLUSTER_COOKIE:-}
+    RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
+    RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
+    RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+
 services:
+  # Nodo 1. Conserva el nombre de servicio y el hostname anteriores: los microservicios siguen
+  # conectándose a rabbitmq:5672 y el volumen existente mantiene sus colas y mensajes.
   rabbitmq:
-    image: rabbitmq:4.3.5-management-alpine
+    <<: *rabbitmq-node
     hostname: pedidos360-rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?Define RABBITMQ_USERNAME}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD}
-      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-pedidos360}
+    networks:
+      default:
+        # El otro nodo lo busca por su hostname (rabbit@pedidos360-rabbitmq).
+        aliases: [pedidos360-rabbitmq]
     ports:
       # Disponibles solo en este computador, no en todas las interfaces de red.
       - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
       - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_cookie:/var/lib/rabbitmq-cluster
+      - ./infra/rabbitmq/20-cluster.conf:/etc/rabbitmq/conf.d/20-cluster.conf:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 30s
+
+  # Nodo 2. Arranca cuando el nodo 1 está sano y se une a él por peer discovery (20-cluster.conf).
+  # Solo está sano cuando ya forma parte del clúster.
+  rabbitmq-2:
+    <<: *rabbitmq-node
+    hostname: pedidos360-rabbitmq-2
+    networks:
+      default:
+        aliases: [pedidos360-rabbitmq-2]
+    ports:
+      - "127.0.0.1:${RABBITMQ_2_MANAGEMENT_PORT:-15673}:15672"
+    volumes:
+      - rabbitmq_2_data:/var/lib/rabbitmq
+      - rabbitmq_cookie:/var/lib/rabbitmq-cluster
+      - ./infra/rabbitmq/20-cluster.conf:/etc/rabbitmq/conf.d/20-cluster.conf:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q cluster_status --formatter json | grep -q 'rabbit@pedidos360-rabbitmq\"'"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
       start_period: 30s
 
   mq-admin:
@@ -46,8 +102,14 @@ services:
     ports:
       - "127.0.0.1:${MQ_ADMIN_PORT:-8086}:8086"
     depends_on:
+      # Crear o eliminar recursos requiere los dos nodos (ver docs/RABBITMQ.md, sección 2).
       rabbitmq:
+        condition: service_healthy
+      rabbitmq-2:
         condition: service_healthy
 
 volumes:
   rabbitmq_data:
+  rabbitmq_2_data:
+  # Erlang cookie compartido por los dos nodos (generado al primer arranque).
+  rabbitmq_cookie:

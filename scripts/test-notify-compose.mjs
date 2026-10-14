@@ -29,7 +29,7 @@ const environment = { ...process.env,
   RABBITMQ_EMAIL_DLQ: 'q.cmd.email.dlq', API_DOCS_ENABLED: 'false'
 };
 for (const key of ['POSTGRES_PORT', 'ORDERS_POSTGRES_PORT', 'BFF_PORT', 'CATALOG_PORT', 'ORDERS_PORT',
-  'REPORT_PORT', 'REPORT_POSTGRES_PORT', 'AUDIT_PORT', 'AUDIT_POSTGRES_PORT', 'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT', 'MQ_ADMIN_PORT']) environment[key] = '0';
+  'REPORT_PORT', 'REPORT_POSTGRES_PORT', 'AUDIT_PORT', 'AUDIT_POSTGRES_PORT', 'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'RABBITMQ_2_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT', 'MQ_ADMIN_PORT']) environment[key] = '0';
 if (withKafka) {
   const probe = createServer();
   await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
@@ -77,7 +77,7 @@ async function ready(service, port) {
 try {
   console.log('Validando Compose y construyendo las imágenes de la solución...');
   const configuration = JSON.parse(await run([...compose, 'config', '--format', 'json']));
-  assert.equal(Object.keys(configuration.services).length, withReport ? 15 : withAudit ? 13 : withKafka ? 11 : 9);
+  assert.equal(Object.keys(configuration.services).length, withReport ? 16 : withAudit ? 14 : withKafka ? 12 : 10);
   for (const service of Object.values(configuration.services)) {
     for (const port of service.ports || []) assert.equal(port.host_ip, '127.0.0.1');
   }
@@ -122,11 +122,11 @@ try {
     assert.equal(await run(['inspect', '--format', '{{.State.ExitCode}}', initializer]), '0');
     console.log('Kafka: tópico orders.events creado con tres particiones.');
   }
-  console.log(`SUCCESS: ${withReport ? 'catorce contenedores activos y un inicializador' : withAudit ? 'doce contenedores activos y un inicializador' : withKafka ? 'diez contenedores activos y un inicializador' : 'nueve contenedores'}; ${javaServices.length} servicios Java verificados en Docker Compose.`);
+  console.log(`SUCCESS: ${withReport ? 'quince contenedores activos y un inicializador' : withAudit ? 'trece contenedores activos y un inicializador' : withKafka ? 'once contenedores activos y un inicializador' : 'diez contenedores'}; ${javaServices.length} servicios Java verificados en Docker Compose.`);
 } catch (error) {
   console.error(error.message);
   try {
-    console.error(await run([...compose, 'logs', '--no-color', '--tail', '35', 'rabbitmq', ...(withKafka ? ['kafka'] : [])]));
+    console.error(await run([...compose, 'logs', '--no-color', '--tail', '35', 'rabbitmq', 'rabbitmq-2', ...(withKafka ? ['kafka'] : [])]));
   } catch {}
   process.exitCode = 1;
 } finally {

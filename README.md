@@ -180,11 +180,12 @@ El proyecto activo está en la raíz. La carpeta `CloudNative` conserva una copi
 | Report | 8084 | Reportería y boletas (consume `q.cmd.invoice`) |
 | Audit | 8085 | Historial y auditoría de dead letters (consume `q.audit.dead-letters`) |
 | mq-admin | 8086 | Administrador de RabbitMQ: colas, exchanges, bindings, DLQ y replay (rol ADMIN) |
-| RabbitMQ | 5672 / 15672 | Broker AMQP / consola de management |
+| RabbitMQ | 5672 / 15672 | Broker AMQP / consola de management (nodo 1 del clúster) |
+| RabbitMQ nodo 2 | 15673 | Consola de management del segundo nodo del clúster |
 
 ## RabbitMQ (EP3)
 
-Orders publica comandos asíncronos (correo, ticket de cocina, boleta) en los exchanges `cmd.direct` y `cmd.topic`; Notify, Catalog y Report los consumen con ACK manual, reintentos acotados y DLQ (`cmd.dead.dlx`); Audit registra cada dead letter y mq-admin permite crear y eliminar colas, exchanges y bindings, vigilar las DLQ y reprocesarlas. Todo está documentado en [docs/RABBITMQ.md](docs/RABBITMQ.md), incluida la tabla de la rúbrica.
+El broker es un clúster de dos nodos (`rabbitmq` y `rabbitmq-2`). Orders publica comandos asíncronos (correo, ticket de cocina, boleta) en los exchanges `cmd.direct` y `cmd.topic`; Notify, Catalog y Report los consumen con ACK manual, reintentos acotados y DLQ (`cmd.dead.dlx`); Audit registra cada dead letter y mq-admin permite crear y eliminar colas, exchanges y bindings, vigilar las DLQ y reprocesarlas. Todo está documentado en [docs/RABBITMQ.md](docs/RABBITMQ.md), incluida la tabla de la rúbrica.
 
 ```powershell
 # Solo RabbitMQ + mq-admin

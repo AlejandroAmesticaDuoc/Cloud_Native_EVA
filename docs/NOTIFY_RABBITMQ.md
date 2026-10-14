@@ -72,7 +72,7 @@ docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.
 Invoke-RestMethod http://localhost:8083/actuator/health/readiness
 ```
 
-Se levantan nueve contenedores: BFF, Orders, Catalog, dos PostgreSQL, RabbitMQ, mq-admin, Notify y Mailpit. Para la solución completa (Kafka, Audit, Report y los consumidores de tickets y boletas) usar el comando de [RabbitMQ en Pedidos360](RABBITMQ.md#10-levantar-con-docker-compose).
+Se levantan diez contenedores: BFF, Orders, Catalog, dos PostgreSQL, los dos nodos de RabbitMQ, mq-admin, Notify y Mailpit. Para la solución completa (Kafka, Audit, Report y los consumidores de tickets y boletas) usar el comando de [RabbitMQ en Pedidos360](RABBITMQ.md#10-levantar-con-docker-compose).
 
 | Dirección local | Uso |
 |---|---|
