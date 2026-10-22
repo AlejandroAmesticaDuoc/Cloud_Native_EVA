@@ -1,0 +1,5 @@
+[
+  {"id":101,"cliente":"Cristian Barrueto","fecha":"2026-10-18","total":45990,"estado":"PENDIENTE"},
+  {"id":102,"cliente":"Juan Pérez","fecha":"2026-10-17","total":29990,"estado":"EN PROCESO"},
+  {"id":103,"cliente":"María López","fecha":"2026-10-16","total":189990,"estado":"COMPLETADO"}
+]
