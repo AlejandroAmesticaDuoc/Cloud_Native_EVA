@@ -30,8 +30,10 @@ services:
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       REPORT_EVENTS_ENABLED: "true"
       REPORT_KAFKA_GROUP: ${REPORT_KAFKA_GROUP:-pedidos360-report-v1}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      REPORT_TIMELINE_KAFKA_GROUP: ${REPORT_TIMELINE_KAFKA_GROUP:-pedidos360-report-timeline-v1}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
       KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
+      KAFKA_TIMELINE_TOPIC: ${KAFKA_TIMELINE_TOPIC:-audit.timeline}
     ports:
       - "127.0.0.1:${REPORT_PORT:-8084}:8084"
     depends_on:

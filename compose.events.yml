@@ -1,0 +1,12 @@
+# Habilita la publicación de eventos de Orders en Kafka (orders.events). Sin este archivo Orders funciona
+# igual pero no publica eventos. Requiere compose.orders.yml y compose.kafka.yml, por ejemplo:
+#   docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.kafka.yml -f compose.events.yml up -d --build
+services:
+  orders:
+    environment:
+      ORDERS_EVENTS_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
+      KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully

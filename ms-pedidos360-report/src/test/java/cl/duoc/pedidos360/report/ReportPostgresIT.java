@@ -16,7 +16,11 @@ import cl.duoc.pedidos360.report.exception.InvoiceRejectedException;
 import cl.duoc.pedidos360.report.messaging.EventParserTest;
 import cl.duoc.pedidos360.report.security.support.TestJwtIssuer;
 import cl.duoc.pedidos360.report.service.*;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import java.nio.charset.StandardCharsets;
+import cl.duoc.pedidos360.report.dto.AuditTimelineEntry;
+import cl.duoc.pedidos360.report.dto.OrderEvent;
+import cl.duoc.pedidos360.report.exception.InvalidEventException;
+import cl.duoc.pedidos360.report.messaging.OrderEventDeserializer;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -33,7 +37,7 @@ import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
 
-@SpringBootTest(properties = {"report.events.enabled=false", "API_DOCS_ENABLED=true"})
+@SpringBootTest(properties = {"report.events.enabled=false", "report.timeline.enabled=false", "API_DOCS_ENABLED=true"})
 @AutoConfigureMockMvc
 @Testcontainers
 class ReportPostgresIT {
@@ -51,6 +55,8 @@ class ReportPostgresIT {
     @Autowired MockMvc mvc;
     @Autowired PlatformTransactionManager manager;
     @Autowired InvoiceService invoices;
+    @Autowired ActivityMetricsService activity;
+    final OrderEventDeserializer deserializer = new OrderEventDeserializer();
     @MockitoBean Clock clock;
 
     @DynamicPropertySource
@@ -70,6 +76,7 @@ class ReportPostgresIT {
         jdbc.update("DELETE FROM report_orders");
         jdbc.update("DELETE FROM report_rejections");
         jdbc.update("DELETE FROM report_invoices");
+        jdbc.update("DELETE FROM report_activity");
         when(clock.instant()).thenReturn(Instant.parse("2026-09-12T14:30:00Z"));
     }
 
@@ -81,8 +88,21 @@ class ReportPostgresIT {
         return event(id, version, "OrderStatusChanged", "DESPACHADO", "ENTREGADO")
                 .replace("2026-09-12T12:00:00Z", at);
     }
+    /** Igual que el contenedor Kafka: deserializa, proyecta y, si el mensaje no sirve, deja el rechazo. */
     void receive(long id, String payload, long offset) {
-        projection.receive(new ConsumerRecord<>("orders.events", 0, offset, String.valueOf(id), payload));
+        byte[] raw = payload.getBytes(StandardCharsets.UTF_8);
+        try {
+            projection.record(String.valueOf(id), deserializer.deserialize("orders.events", raw));
+        } catch (InvalidEventException exception) {
+            projection.reject("orders.events", 0, offset, exception.reason(), raw);
+        } catch (RuntimeException exception) {
+            projection.reject("orders.events", 0, offset, "INVALID_EVENT", raw);
+        }
+    }
+
+    AuditTimelineEntry entry(long orderId, String actor, OrderEvent.EventType action, String at) {
+        return new AuditTimelineEntry(1, UUID.randomUUID(), UUID.randomUUID(), orderId, actor, action, null,
+                Status.CREADO, Instant.parse(at), Instant.parse(at).plusSeconds(1), "trace-activity", "ms-pedidos360-orders");
     }
     int count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class); }
     String token(String role) throws Exception {
@@ -338,5 +358,43 @@ class ReportPostgresIT {
                 .andExpect(jsonPath("$.paths['/api/v1/reports/summary'].post").doesNotExist());
         mvc.perform(get("/actuator/health/readiness")).andExpect(status().isServiceUnavailable());
         mvc.perform(get("/actuator/health/liveness")).andExpect(status().isOk());
+    }
+
+    @Test
+    void computesRealTimeActivityFromTheTimelineAndIgnoresReplays() {
+        var first = entry(1, "operador", OrderEvent.EventType.OrderCreated, "2026-09-12T14:10:00Z");
+        assertTrue(activity.record("1", first));
+        assertFalse(activity.record("1", first), "la reentrega de Kafka no duplica la métrica");
+        activity.record("2", entry(2, "operador", OrderEvent.EventType.OrderAccepted, "2026-09-12T14:10:30Z"));
+        activity.record("3", entry(3, "alice", OrderEvent.EventType.OrderCreated, "2026-09-12T14:20:00Z"));
+        activity.record("4", entry(4, "alice", OrderEvent.EventType.OrderCreated, "2026-09-12T12:00:00Z"));
+        var metrics = activity.activity(60);
+        assertEquals(3, metrics.totalEvents());
+        assertEquals(2L, metrics.byAction().get(OrderEvent.EventType.OrderCreated));
+        assertEquals(1L, metrics.byAction().get(OrderEvent.EventType.OrderAccepted));
+        assertEquals(0L, metrics.byAction().get(OrderEvent.EventType.OrderCancelled));
+        assertEquals("operador", metrics.topActors().getFirst().actorId());
+        assertEquals(2, metrics.topActors().getFirst().events());
+        assertEquals(2, metrics.perMinute().size());
+        assertEquals(Instant.parse("2026-09-12T14:10:00Z"), metrics.perMinute().getFirst().minute());
+        assertEquals(2, metrics.perMinute().getFirst().events());
+        assertEquals(Instant.parse("2026-09-12T14:20:01Z"), metrics.lastRecordedAt());
+        assertEquals(4, activity.activity(1440).totalEvents());
+        assertThrows(InvalidEventException.class, () -> activity.record("99", entry(5, "x", OrderEvent.EventType.OrderCreated, "2026-09-12T14:00:00Z")));
+    }
+
+    @Test
+    void servesActivityOnlyToAdministratorsAndValidatesTheWindow() throws Exception {
+        activity.record("1", entry(1, "operador", OrderEvent.EventType.OrderCreated, "2026-09-12T14:10:00Z"));
+        mvc.perform(get("/api/v1/reports/activity?minutes=30").header("Authorization", "Bearer " + token("ADMIN")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalEvents").value(1))
+                .andExpect(jsonPath("$.byAction.OrderCreated").value(1))
+                .andExpect(jsonPath("$.topActors[0].actorId").value("operador"));
+        mvc.perform(get("/api/v1/reports/activity").header("Authorization", "Bearer " + token("OPERADOR")))
+                .andExpect(status().isForbidden());
+        for (String minutes : List.of("0", "1441", "abc")) {
+            mvc.perform(get("/api/v1/reports/activity?minutes=" + minutes).header("Authorization", "Bearer " + token("ADMIN")))
+                    .andExpect(status().isBadRequest());
+        }
     }
 }

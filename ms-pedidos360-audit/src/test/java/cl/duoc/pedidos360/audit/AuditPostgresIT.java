@@ -12,7 +12,15 @@ import cl.duoc.pedidos360.audit.security.support.TestJwtIssuer;
 import cl.duoc.pedidos360.audit.dto.DeadLetter;
 import cl.duoc.pedidos360.audit.service.AuditStore;
 import cl.duoc.pedidos360.audit.service.DeadLetterStore;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import java.nio.charset.StandardCharsets;
+import cl.duoc.pedidos360.audit.dto.AuditTimelineEntry;
+import cl.duoc.pedidos360.audit.exception.InvalidEventException;
+import cl.duoc.pedidos360.audit.exception.TimelinePublishException;
+import cl.duoc.pedidos360.audit.messaging.OrderEventDeserializer;
+import cl.duoc.pedidos360.audit.service.TimelinePublisher;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import static org.mockito.Mockito.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -28,7 +36,7 @@ import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.MountableFile;
 
-@SpringBootTest(properties = {"audit.events.enabled=false", "API_DOCS_ENABLED=true"})
+@SpringBootTest(properties = {"audit.events.enabled=false", "audit.timeline.enabled=false", "API_DOCS_ENABLED=true"})
 @AutoConfigureMockMvc
 @Testcontainers
 class AuditPostgresIT {
@@ -46,6 +54,8 @@ class AuditPostgresIT {
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
     @Autowired PlatformTransactionManager manager;
+    @MockitoBean TimelinePublisher timeline;
+    final OrderEventDeserializer deserializer = new OrderEventDeserializer();
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -119,7 +129,19 @@ class AuditPostgresIT {
     }
 
     String created(long order) { return EventParserTest.event(order, 1, "OrderCreated", null, "CREADO"); }
-    void receive(String payload, long offset) { store.receive(new ConsumerRecord<>("orders.events", 0, offset, "10", payload)); }
+    void receive(String payload, long offset) { receive("10", 0, offset, payload); }
+
+    /** Igual que el contenedor Kafka: deserializa, registra y, si el mensaje no sirve, deja el rechazo. */
+    void receive(String key, int partition, long offset, String payload) {
+        byte[] raw = payload.getBytes(StandardCharsets.UTF_8);
+        try {
+            store.record(key, deserializer.deserialize("orders.events", raw));
+        } catch (InvalidEventException exception) {
+            store.reject("orders.events", partition, offset, exception.reason(), raw);
+        } catch (RuntimeException exception) {
+            store.reject("orders.events", partition, offset, "INVALID_EVENT", raw);
+        }
+    }
     int count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class); }
     String token(String role) throws Exception {
         return ISSUER.sign(ISSUER.claims().claim("roles", List.of(role)).build());
@@ -146,7 +168,7 @@ class AuditPostgresIT {
     void storesLateEventsAndSupportsCursorAndOrderFilter() {
         receive(EventParserTest.event(10, 2, "OrderCancelled", "CREADO", "CANCELADO"), 0);
         receive(created(10), 1);
-        store.receive(new ConsumerRecord<>("orders.events", 1, 0, "11", created(11)));
+        receive("11", 1, 0, created(11));
         var page = store.find(10L, 0, 1);
         assertEquals(2L, page.items().getFirst().event().aggregateVersion());
         assertNotNull(page.nextAfterId());
@@ -265,5 +287,37 @@ class AuditPostgresIT {
                 .andExpect(jsonPath("$.paths['/api/v1/audit'].post").doesNotExist());
         mvc.perform(get("/actuator/health/readiness")).andExpect(status().isServiceUnavailable());
         mvc.perform(get("/actuator/health/liveness")).andExpect(status().isOk());
+    }
+
+    @Test
+    void publishesOneTimelineEntryPerNewEventOnly() {
+        String event = created(10);
+        receive(event, 0);
+        receive(event, 1);
+        var entry = ArgumentCaptor.forClass(AuditTimelineEntry.class);
+        verify(timeline, times(1)).publish(entry.capture());
+        assertEquals(10L, entry.getValue().orderId());
+        assertEquals("operator", entry.getValue().actorId());
+        assertEquals(AuditTimelineEntry.ORIGIN, entry.getValue().origin());
+    }
+
+    @Test
+    void rollsBackTheEventWhenTheTimelineCannotBePublished() {
+        doThrow(new TimelinePublishException("broker offline", null)).when(timeline).publish(any());
+        String event = created(10);
+        assertThrows(TimelinePublishException.class,
+                () -> store.record("10", deserializer.deserialize("orders.events", event.getBytes(StandardCharsets.UTF_8))));
+        assertEquals(0, count("audit_events"));
+        reset(timeline);
+        receive(event, 0);
+        assertEquals(1, count("audit_events"));
+        verify(timeline).publish(any());
+    }
+
+    @Test
+    void rejectsAKeyThatDoesNotMatchTheOrder() {
+        receive("99", 0, 5, created(10));
+        assertEquals(0, count("audit_events"));
+        assertEquals("INVALID_EVENT", jdbc.queryForObject("SELECT reason FROM audit_rejections", String.class));
     }
 }

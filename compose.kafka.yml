@@ -1,65 +1,122 @@
+# Kafka de Pedidos360: Zookeeper + tres brokers (Confluent Platform 7.9.2 = Apache Kafka 3.9, la última
+# línea que funciona con Zookeeper; Kafka 4.x solo usa KRaft). Se puede levantar solo:
+#   docker compose --env-file .env -f compose.kafka.yml up -d
+# Kafka-UI está en compose.kafka-ui.yml y la conexión de Orders en compose.events.yml. Los tópicos y su
+# configuración los crea kafka-init con infra/kafka/create-topics.sh (particiones, réplicas, retención y
+# cleanup policy por flujo de datos).
+#
+# Red: los brokers se comunican por el listener INTERNAL (kafka-N:19092). El listener EXTERNAL se publica
+# solo en 127.0.0.1 (9092, 9093 y 9094) para clientes que corren en el mismo computador.
+
+x-kafka-environment: &kafka-environment
+  KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  # Los tópicos se crean explícitamente con su configuración (kafka-init), nunca al vuelo.
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  # Valores por defecto del clúster: tres réplicas y al menos dos sincronizadas para aceptar escrituras
+  # con acks=all, así el clúster tolera la caída de un broker sin perder mensajes confirmados.
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_NUM_PARTITIONS: 3
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_LOG_RETENTION_HOURS: 168
+  KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+
+x-kafka-broker: &kafka-broker
+  image: confluentinc/cp-kafka:7.9.2
+  depends_on:
+    zookeeper:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:19092 > /dev/null"]
+    interval: 10s
+    timeout: 10s
+    retries: 18
+    start_period: 30s
+
 services:
-  kafka:
-    image: apache/kafka:4.3.1
-    hostname: kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.9.2
+    hostname: zookeeper
     environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:29093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
-      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-cGVkaWRvczM2MC1rYWZrYQ}
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_LOG_DIRS: /var/lib/kafka/data
-      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
-    ports:
-      - "127.0.0.1:${KAFKA_PORT:-9092}:9092"
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_HEAP_OPTS: -Xms128m -Xmx256m
     volumes:
-      - kafka_data:/var/lib/kafka/data
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
     healthcheck:
-      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:19092", "--list"]
+      test: ["CMD-SHELL", "cub zk-ready localhost:2181 5"]
       interval: 10s
       timeout: 10s
       retries: 12
-      start_period: 30s
+      start_period: 15s
 
+  kafka-1:
+    <<: *kafka-broker
+    hostname: kafka-1
+    environment:
+      <<: *kafka-environment
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-1:19092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
+    ports:
+      - "127.0.0.1:${KAFKA_PORT:-9092}:9092"
+    volumes:
+      - kafka_1_data:/var/lib/kafka/data
+
+  kafka-2:
+    <<: *kafka-broker
+    hostname: kafka-2
+    environment:
+      <<: *kafka-environment
+      KAFKA_BROKER_ID: 2
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-2:19092,EXTERNAL://localhost:${KAFKA_2_PORT:-9093}
+    ports:
+      - "127.0.0.1:${KAFKA_2_PORT:-9093}:9092"
+    volumes:
+      - kafka_2_data:/var/lib/kafka/data
+
+  kafka-3:
+    <<: *kafka-broker
+    hostname: kafka-3
+    environment:
+      <<: *kafka-environment
+      KAFKA_BROKER_ID: 3
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-3:19092,EXTERNAL://localhost:${KAFKA_3_PORT:-9094}
+    ports:
+      - "127.0.0.1:${KAFKA_3_PORT:-9094}:9092"
+    volumes:
+      - kafka_3_data:/var/lib/kafka/data
+
+  # Crea o actualiza los tópicos con sus particiones, réplicas, retención y cleanup policy.
   kafka-init:
-    image: apache/kafka:4.3.1
-    entrypoint: ["/opt/kafka/bin/kafka-topics.sh"]
-    command:
-      - --bootstrap-server
-      - kafka:19092
-      - --create
-      - --if-not-exists
-      - --topic
-      - ${KAFKA_ORDERS_TOPIC:-orders.events}
-      - --partitions
-      - "3"
-      - --replication-factor
-      - "1"
-      - --config
-      - retention.ms=604800000
-      - --config
-      - cleanup.policy=delete
+    image: confluentinc/cp-kafka:7.9.2
+    entrypoint: ["bash", "/opt/pedidos360/create-topics.sh"]
+    environment:
+      KAFKA_BOOTSTRAP: kafka-1:19092,kafka-2:19092,kafka-3:19092
+      KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
+      KAFKA_TIMELINE_TOPIC: ${KAFKA_TIMELINE_TOPIC:-audit.timeline}
+    volumes:
+      - ./infra/kafka/create-topics.sh:/opt/pedidos360/create-topics.sh:ro
     depends_on:
-      kafka:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
         condition: service_healthy
     restart: "no"
 
-  orders:
-    environment:
-      ORDERS_EVENTS_ENABLED: "true"
-      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
-      KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
-
 volumes:
-  kafka_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_1_data:
+  kafka_2_data:
+  kafka_3_data:

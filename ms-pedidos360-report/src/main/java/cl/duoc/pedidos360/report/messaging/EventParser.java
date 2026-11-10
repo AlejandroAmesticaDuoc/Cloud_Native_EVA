@@ -27,14 +27,23 @@ public class EventParser {
     }
 
     public OrderEvent parse(String key, String payload) {
+        OrderEvent event = parse(payload);
+        if (!String.valueOf(event.orderId()).equals(key)) throw new IllegalArgumentException("INVALID_EVENT");
+        return event;
+    }
+
+    /**
+     * Valida el contrato v1 de forma estricta (exactamente los 13 campos, tipos sin coerción, Bean Validation y
+     * transición de estado coherente) y normaliza el total a 2 decimales. Lo usa OrderEventDeserializer.
+     */
+    public OrderEvent parse(String payload) {
         if (payload == null || payload.getBytes(StandardCharsets.UTF_8).length > 32768) {
             throw new IllegalArgumentException("INVALID_EVENT");
         }
         var tree = json.readTree(payload);
         if (!tree.isObject() || !tree.propertyNames().equals(FIELDS)) throw new IllegalArgumentException("INVALID_EVENT");
         OrderEvent event = json.treeToValue(tree, OrderEvent.class);
-        if (!validator.validate(event).isEmpty() || !event.validTransition()
-                || !String.valueOf(event.orderId()).equals(key)) {
+        if (!validator.validate(event).isEmpty() || !event.validTransition()) {
             throw new IllegalArgumentException("INVALID_EVENT");
         }
         return new OrderEvent(event.schemaVersion(), event.eventId(), event.eventType(), event.orderId(),

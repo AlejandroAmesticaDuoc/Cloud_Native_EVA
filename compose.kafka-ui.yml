@@ -1,0 +1,25 @@
+# Kafka-UI: consola web para administrar los brokers, tópicos, mensajes y consumer groups del clúster de
+# compose.kafka.yml. Se levanta junto a ese archivo:
+#   docker compose --env-file .env -f compose.kafka.yml -f compose.kafka-ui.yml up -d
+# Abrir http://localhost:8090 (solo en este computador) e ingresar con KAFKA_UI_USERNAME / KAFKA_UI_PASSWORD.
+services:
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    environment:
+      KAFKA_CLUSTERS_0_NAME: pedidos360
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      # La configuración del clúster viene de este archivo; no se edita desde la consola.
+      DYNAMIC_CONFIG_ENABLED: "false"
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: ${KAFKA_UI_USERNAME:?Define KAFKA_UI_USERNAME}
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD:?Define KAFKA_UI_PASSWORD}
+    ports:
+      - "127.0.0.1:${KAFKA_UI_PORT:-8090}:8080"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
