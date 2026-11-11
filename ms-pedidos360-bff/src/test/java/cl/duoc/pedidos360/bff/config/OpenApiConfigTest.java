@@ -63,6 +63,7 @@ class OpenApiConfigTest {
                 .andExpect(jsonPath("$.paths['/api/v1/audit'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/reports/summary'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/reports/lead-time'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/reports/activity'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/audit/orders/{orderId}'].get").exists())
                 .andExpect(jsonPath(
                         "$.paths['/api/v1/auth/me'].get"

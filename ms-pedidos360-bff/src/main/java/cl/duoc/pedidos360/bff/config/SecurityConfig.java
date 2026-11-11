@@ -142,7 +142,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/reports/summary",
-                                "/api/v1/reports/lead-time"
+                                "/api/v1/reports/lead-time",
+                                "/api/v1/reports/activity"
                         ).access(scopeAndAnyRole("ADMIN"))
 
                         .requestMatchers(

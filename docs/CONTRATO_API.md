@@ -68,6 +68,7 @@ La eliminación de un producto debería ser lógica para no perder el historial 
 |---|---|---|---|
 | `GET` | `/api/v1/reports/summary` | `ADMIN` | Obtiene un resumen de pedidos y ventas |
 | `GET` | `/api/v1/reports/lead-time` | `ADMIN` | Consulta el tiempo promedio de entrega |
+| `GET` | `/api/v1/reports/activity?minutes=60` | `ADMIN` | Actividad en tiempo real desde Kafka (`audit.timeline`): acciones por tipo, actores y minuto (`minutes` 1..1440) |
 
 Ambas rutas están implementadas con una proyección de Kafka en PostgreSQL, sin consultar Orders al generar el reporte. Requieren rol ADMIN y scope pedidos360.access.
 

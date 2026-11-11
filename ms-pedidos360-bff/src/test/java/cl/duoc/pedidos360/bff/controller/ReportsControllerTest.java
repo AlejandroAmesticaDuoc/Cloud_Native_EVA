@@ -81,4 +81,35 @@ class ReportsControllerTest {
                 .andExpect(status().isBadGateway()).andExpect(jsonPath("$.traceId").value("report-failure"))
                 .andExpect(header().string("X-Trace-Id", "report-failure"));
     }
+
+    @Test
+    void administratorCanReadRealTimeActivity() throws Exception {
+        when(service.activity(60)).thenReturn(new ActivityResponse(Instant.parse("2026-11-10T11:00:00Z"),
+                Instant.parse("2026-11-10T12:00:00Z"), 1L, Map.of("OrderCreated", 1L),
+                List.of(new ActivityResponse.ActorActivity("operador", 1L)),
+                List.of(new ActivityResponse.MinuteActivity(Instant.parse("2026-11-10T11:30:00Z"), 1L)), null));
+        when(service.activity(15)).thenReturn(new ActivityResponse(Instant.parse("2026-11-10T11:45:00Z"),
+                Instant.parse("2026-11-10T12:00:00Z"), 0L, Map.of(), List.of(), List.of(), null));
+        mvc.perform(get("/api/v1/reports/activity").with(reader("ADMIN"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalEvents").value(1))
+                .andExpect(jsonPath("$.topActors[0].actorId").value("operador"));
+        mvc.perform(get("/api/v1/reports/activity?minutes=15").with(reader("ADMIN"))).andExpect(status().isOk());
+        verify(service).activity(60);
+        verify(service).activity(15);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "1441", "abc"})
+    void validatesTheActivityWindow(String minutes) throws Exception {
+        mvc.perform(get("/api/v1/reports/activity?minutes=" + minutes).with(reader("ADMIN")))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CLIENTE", "OPERADOR", "AUDITOR"})
+    void restrictsActivityToAdministrators(String role) throws Exception {
+        mvc.perform(get("/api/v1/reports/activity").with(reader(role))).andExpect(status().isForbidden());
+        verifyNoInteractions(service);
+    }
 }

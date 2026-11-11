@@ -128,9 +128,10 @@ class EndpointAuthorizationTest {
                         )))
                 .andExpect(status().isForbidden());
 
+        // Desde 0a86033 ADMIN puede crear pedidos; AUDITOR sigue sin permiso.
         mockMvc.perform(post(ORDERS_PATH)
                         .with(jwtWithScopeAndRoles(
-                                "ADMIN"
+                                "AUDITOR"
                         )))
                 .andExpect(status().isForbidden());
     }

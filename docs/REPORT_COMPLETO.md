@@ -102,6 +102,14 @@ Si todavía no hay entregas:
 
 null significa “sin datos”, no una entrega instantánea. Una entrega con duración real cero sí puede dar 0.000.
 
+
+## GET /api/v1/reports/activity
+
+Desde la EP5: actividad en tiempo real calculada desde el tópico Kafka `audit.timeline` (consumer group
+`pedidos360-report-timeline-v1`). Parámetro `minutes` entre 1 y 1440 (por defecto 60). Devuelve `totalEvents`, `byAction`,
+`topActors` (10 más activos), `perMinute` y `lastRecordedAt`. Solo `ADMIN`; el BFF lo expone en la misma ruta.
+Ver [KAFKA.md](KAFKA.md).
+
 ## Seguridad y consistencia
 
 Ambos endpoints requieren JWT válido, scope pedidos360.access y rol ADMIN. CLIENTE, OPERADOR y AUDITOR no tienen acceso. No hay endpoints de escritura. Las verificaciones se realizan tanto en BFF como en Report.

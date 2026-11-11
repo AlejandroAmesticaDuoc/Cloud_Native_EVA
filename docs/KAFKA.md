@@ -101,7 +101,8 @@ si el tópico existe, reaplica su configuración).
 
 - `GET /api/v1/reports/summary` y `/lead-time` (EP2): KPIs de pedidos desde `orders.events`.
 - **Nuevo** `GET /api/v1/reports/activity?minutes=60` (rol ADMIN): desde `audit.timeline`, acciones por tipo, los 10 actores
-  más activos, acciones por minuto y `lastRecordedAt` (frescura de los datos).
+  más activos, acciones por minuto y `lastRecordedAt` (frescura de los datos). El BFF lo expone en la misma ruta
+  (`/api/v1/reports/activity`, con JWT y rol ADMIN) para el dashboard del frontend.
 
 ## 7. Administración
 

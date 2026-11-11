@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.bff.controller;
 
+import cl.duoc.pedidos360.bff.dto.report.ActivityResponse;
 import cl.duoc.pedidos360.bff.dto.report.LeadTimeResponse;
 import cl.duoc.pedidos360.bff.dto.report.SummaryResponse;
 import cl.duoc.pedidos360.bff.service.ReportsService;
@@ -24,5 +25,11 @@ public class ReportsController {
     @GetMapping("/lead-time")
     public LeadTimeResponse leadTime() {
         return reports.leadTime();
+    }
+
+    /** Actividad en tiempo real (Kafka audit.timeline) de los últimos {@code minutes} minutos. */
+    @GetMapping("/activity")
+    public ActivityResponse activity(@RequestParam(defaultValue = "60") @Min(1) @Max(1440) int minutes) {
+        return reports.activity(minutes);
     }
 }

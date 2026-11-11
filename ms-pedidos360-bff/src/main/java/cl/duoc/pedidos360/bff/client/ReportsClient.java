@@ -38,6 +38,17 @@ public class ReportsClient {
         return result;
     }
 
+    public ActivityResponse activity(int minutes) {
+        ActivityResponse result = execute(() -> client.get()
+                .uri(builder -> builder.path("/api/v1/reports/activity").queryParam("minutes", minutes).build())
+                .retrieve().body(ActivityResponse.class));
+        if (result.totalEvents() == null || result.byAction() == null || result.topActors() == null
+                || result.perMinute() == null || result.from() == null || result.to() == null) {
+            throw new DownstreamServiceException(UNAVAILABLE);
+        }
+        return result;
+    }
+
     private <T> T execute(Supplier<T> operation) {
         try {
             T result = operation.get();

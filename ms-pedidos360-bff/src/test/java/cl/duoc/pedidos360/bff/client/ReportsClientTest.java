@@ -86,4 +86,39 @@ class ReportsClientTest {
         assertThrows(DownstreamServiceException.class, client::leadTime);
         server.verify();
     }
+
+    @Test
+    void forwardsTheWindowAndReadsRealTimeActivity() {
+        server.expect(requestTo("http://report.test/api/v1/reports/activity?minutes=30"))
+                .andExpect(method(HttpMethod.GET)).andRespond(withSuccess("""
+                        {"from":"2026-11-10T12:00:00Z","to":"2026-11-10T12:30:00Z","totalEvents":3,
+                        "byAction":{"OrderCreated":2,"OrderAccepted":1,"OrderStatusChanged":0,"OrderCancelled":0},
+                        "topActors":[{"actorId":"operador","events":2}],
+                        "perMinute":[{"minute":"2026-11-10T12:10:00Z","events":3}],"lastRecordedAt":"2026-11-10T12:10:01Z"}
+                        """, MediaType.APPLICATION_JSON));
+        var activity = client.activity(30);
+        assertEquals(3, activity.totalEvents());
+        assertEquals(2, activity.byAction().get("OrderCreated"));
+        assertEquals("operador", activity.topActors().getFirst().actorId());
+        assertEquals(1, activity.perMinute().size());
+        server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"totalEvents\":1}", "null"})
+    void rejectsIncompleteActivity(String body) {
+        server.expect(requestTo("http://report.test/api/v1/reports/activity?minutes=60"))
+                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        assertThrows(DownstreamServiceException.class, () -> client.activity(60));
+        server.verify();
+    }
+
+    @Test
+    void hidesActivityErrors() {
+        server.expect(requestTo("http://report.test/api/v1/reports/activity?minutes=60"))
+                .andRespond(withStatus(HttpStatusCode.valueOf(503)).body("internal secret"));
+        var error = assertThrows(DownstreamServiceException.class, () -> client.activity(60));
+        assertEquals("El servicio de reportería no está disponible", error.getMessage());
+        server.verify();
+    }
 }

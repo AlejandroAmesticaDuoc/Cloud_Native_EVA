@@ -20,4 +20,9 @@ public class ReportsService {
     public LeadTimeResponse leadTime() {
         return client.leadTime();
     }
+
+    public ActivityResponse activity(int minutes) {
+        if (minutes < 1 || minutes > 1440) throw new IllegalArgumentException("minutes debe estar entre 1 y 1440");
+        return client.activity(minutes);
+    }
 }
