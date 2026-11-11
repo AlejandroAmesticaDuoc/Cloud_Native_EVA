@@ -18,7 +18,7 @@ En esta primera etapa nos enfocaremos principalmente en implementar la autentica
 - La infraestructura principal estará en AWS.
 - La base de datos será PostgreSQL. Primero se ejecutará localmente en Docker y luego se definirá su alojamiento en AWS.
 - Se implementará el rol `AUDITOR`.
-- RabbitMQ y Kafka tendrán inicialmente un alcance básico y se ampliarán más adelante. En la EP3 RabbitMQ se amplió con comandos de correo, tickets de cocina y boletas, DLQ, auditoría y un microservicio administrador ([RabbitMQ en Pedidos360](docs/RABBITMQ.md)).
+- RabbitMQ y Kafka tendrán inicialmente un alcance básico y se ampliarán más adelante. En la EP3 RabbitMQ se amplió con comandos de correo, tickets de cocina y boletas, DLQ, auditoría y un microservicio administrador ([RabbitMQ en Pedidos360](docs/RABBITMQ.md)). En la EP5 Kafka pasó a Zookeeper con tres brokers, eventos tipados, la línea de tiempo `audit.timeline`, DLT por consumidor, métricas de actividad en tiempo real, Kafka-UI y el microservicio `ms-pedidos360-kafka-admin` ([Kafka en Pedidos360](docs/KAFKA.md)).
 - El BFF volverá a validar el JWT aunque API Gateway ya lo haya validado.
 
 ## Arquitectura general
@@ -82,7 +82,7 @@ AWS API Gateway será la entrada pública del sistema. El BFF y los demás micro
 - Docker Compose
 - PostgreSQL 17
 - RabbitMQ
-- Kafka en modo KRaft, sin ZooKeeper
+- Kafka 3.9 con Zookeeper y tres brokers (Confluent 7.9.2), Kafka-UI y ms-pedidos360-kafka-admin
 
 ## Estructura planificada
 
@@ -154,6 +154,7 @@ La autorización será aplicada tanto en el frontend como en el backend. La vali
 - [RabbitMQ en Pedidos360: topología, DLQ, mq-admin y demostración EP3](docs/RABBITMQ.md)
 - [RabbitMQ, Notify y correo local](docs/NOTIFY_RABBITMQ.md)
 - [Administrador de RabbitMQ (mq-admin)](ms-pedidos360-mq-admin/README.md)
+- [Kafka en Pedidos360 (EP5): tópicos, grupos, errores y administración](docs/KAFKA.md)
 - [Kafka y contrato de eventos](docs/KAFKA_EVENTOS.md)
 - [Audit, historial y consultas protegidas](docs/AUDIT_COMPLETO.md)
 - [Report, ventas por hora y tiempos de entrega](docs/REPORT_COMPLETO.md)
@@ -164,7 +165,7 @@ Se decidió utilizar PostgreSQL por los problemas para habilitar la cuenta del p
 
 Catalog cuenta con CRUD, validaciones, JWT y stock transaccional. Orders crea y consulta pedidos, verifica propiedad, aplica estados y coordina descuentos y devoluciones con una identidad de servicio. Se verificó BFF → Orders → Catalog → PostgreSQL, incluyendo reintentos después de una respuesta perdida y un reinicio. Orders también publica avisos en RabbitMQ y eventos en Kafka mediante registros pendientes en su base. Notify envía los avisos por SMTP a un buzón local de demostración. Audit conserva el historial para ADMIN y AUDITOR. Report procesa Kafka con otro grupo, mantiene su propia base y entrega a ADMIN el resumen de estados, montos entregados por hora y lead time. Siguen pendientes las pruebas con frontend, Entra real y AWS.
 
-El archivo `compose.postgres.yml` inicia la base de Catalog. Al combinarlo con `compose.catalog.yml` se agregan Catalog y BFF; `compose.orders.yml` incorpora Orders y su propia base. `compose.rabbitmq.yml` agrega RabbitMQ y mq-admin (y se puede levantar solo); `compose.notify.yml` agrega Notify y Mailpit y se usa junto a `compose.rabbitmq.yml`; `compose.kafka.yml` incorpora Kafka y el inicializador del tópico. `compose.audit.yml` y `compose.report.yml` añaden sus servicios y bases PostgreSQL, y `compose.commands.yml` activa los consumidores RabbitMQ de Catalog, Report y Audit. Usar los nueve archivos con `-f`, en ese orden y en un solo comando, para la solución local completa del backend (ver la sección RabbitMQ). No despliegan en AWS. H2 se utiliza solamente en tests; las integraciones utilizan PostgreSQL real con Docker.
+El archivo `compose.postgres.yml` inicia la base de Catalog. Al combinarlo con `compose.catalog.yml` se agregan Catalog y BFF; `compose.orders.yml` incorpora Orders y su propia base. `compose.rabbitmq.yml` agrega RabbitMQ y mq-admin (y se puede levantar solo); `compose.notify.yml` agrega Notify y Mailpit y se usa junto a `compose.rabbitmq.yml`; `compose.kafka.yml` incorpora Zookeeper, tres brokers Kafka y el inicializador de tópicos (se puede levantar solo); `compose.events.yml` activa la publicación de Orders en Kafka; `compose.kafka-ui.yml` agrega Kafka-UI y `compose.kafka-admin.yml` el administrador de Kafka. `compose.audit.yml` y `compose.report.yml` añaden sus servicios y bases PostgreSQL, y `compose.commands.yml` activa los consumidores RabbitMQ de Catalog, Report y Audit. Usar los doce archivos con `-f`, en ese orden y en un solo comando, para la solución local completa del backend (ver la sección RabbitMQ). No despliegan en AWS. H2 se utiliza solamente en tests; las integraciones utilizan PostgreSQL real con Docker.
 
 El proyecto activo está en la raíz. La carpeta `CloudNative` conserva una copia antigua del trabajo del equipo, no es una segunda configuración vigente y no debe usarse para ejecutar estos pasos.
 
@@ -182,6 +183,13 @@ El proyecto activo está en la raíz. La carpeta `CloudNative` conserva una copi
 | mq-admin | 8086 | Administrador de RabbitMQ: colas, exchanges, bindings, DLQ y replay (rol ADMIN) |
 | RabbitMQ | 5672 / 15672 | Broker AMQP / consola de management (nodo 1 del clúster) |
 | RabbitMQ nodo 2 | 15673 | Consola de management del segundo nodo del clúster |
+| kafka-admin | 8087 | Administrador de Kafka: tópicos, configuraciones, particiones y consumer groups (rol ADMIN) |
+| Kafka | 9092 / 9093 / 9094 | Tres brokers (listeners externos, solo 127.0.0.1); Zookeeper solo en la red interna |
+| Kafka-UI | 8090 | Consola web de brokers, tópicos, mensajes y consumer groups |
+
+## Kafka (EP5)
+
+Kafka corre con Zookeeper y tres brokers (factor de replicación 3, `min.insync.replicas=2`). Orders publica `OrderEvent` en `orders.events`; Audit lo consume (grupo propio) y publica `audit.timeline`; Report consume ambos tópicos con grupos distintos para los KPIs y las métricas de actividad en tiempo real (`GET /api/v1/reports/activity`). Los mensajes inválidos van a la DLT de cada consumidor y las fallas transitorias se reintentan sin perder eventos. Kafka-UI y `ms-pedidos360-kafka-admin` administran tópicos y consumer groups. Detalle, guion de demostración y tabla de la rúbrica en [docs/KAFKA.md](docs/KAFKA.md).
 
 ## RabbitMQ (EP3)
 
@@ -191,7 +199,7 @@ El broker es un clúster de dos nodos (`rabbitmq` y `rabbitmq-2`). Orders public
 # Solo RabbitMQ + mq-admin
 docker compose -f compose.rabbitmq.yml up -d --build
 # Solución completa del backend (el orden de los -f importa)
-docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml up -d --build
+docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.events.yml -f compose.kafka-ui.yml -f compose.kafka-admin.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml up -d --build
 ```
 
 ## Reglas principales

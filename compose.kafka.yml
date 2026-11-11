@@ -104,7 +104,8 @@ services:
       KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
       KAFKA_TIMELINE_TOPIC: ${KAFKA_TIMELINE_TOPIC:-audit.timeline}
     volumes:
-      - ./infra/kafka/create-topics.sh:/opt/pedidos360/create-topics.sh:ro
+      # create-topics.sh (crear/actualizar tópicos) e inspect.sh (inspeccionar tópicos y consumer groups).
+      - ./infra/kafka:/opt/pedidos360:ro
     depends_on:
       kafka-1:
         condition: service_healthy

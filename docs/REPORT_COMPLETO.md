@@ -173,7 +173,7 @@ Los datos reflejan los eventos que Report alcanzó a consumir. Kafka local retie
 
 Los eventos aceptados y la proyección no se limpian automáticamente. Se requieren respaldos, política de retención, alertas de atraso y procedimiento de reconstrucción antes de un uso permanente. Los KPIs recorren la proyección local y son suficientes para el MVP; no se presenta este diseño como analítica de gran volumen.
 
-Queda integrar las vistas Angular, probar Entra real y desplegar/verificar en AWS. El caso original menciona Oracle y Kafka con ZooKeeper; el repositorio utiliza PostgreSQL por decisión del equipo y Kafka KRaft. Estas diferencias deben comunicarse y validarse con el docente, sin asumir que ya aprobó excepciones.
+Queda integrar las vistas Angular, probar Entra real y desplegar/verificar en AWS. El caso original menciona Oracle; el repositorio utiliza PostgreSQL por decisión del equipo. Desde la EP5 Kafka corre con Zookeeper y tres brokers, y Report también consume `audit.timeline` para métricas de actividad ([KAFKA.md](KAFKA.md)). Estas diferencias deben comunicarse y validarse con el docente, sin asumir que ya aprobó excepciones.
 
 La pauta EP1 se concentra en MSAL/Angular y validación JWT del BFF. Completar estos KPIs no reemplaza esas verificaciones ni demuestra por sí solo el cumplimiento de la evaluación.
 

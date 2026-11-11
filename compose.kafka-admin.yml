@@ -1,0 +1,19 @@
+# Microservicio administrador de Kafka (tópicos, configuraciones y consumer groups). Requiere compose.kafka.yml:
+#   docker compose --env-file .env -f compose.kafka.yml -f compose.kafka-admin.yml up -d --build
+# API en http://localhost:8087/api/v1/kafka-admin (JWT con scope pedidos360.access y rol ADMIN).
+services:
+  kafka-admin:
+    build: ./ms-pedidos360-kafka-admin
+    environment:
+      KAFKA_ADMIN_PORT: 8087
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
+      KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
+      KAFKA_TIMELINE_TOPIC: ${KAFKA_TIMELINE_TOPIC:-audit.timeline}
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?Define el emisor real de Entra ID}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?Define la audiencia real de la API}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+    ports:
+      - "127.0.0.1:${KAFKA_ADMIN_PORT:-8087}:8087"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully

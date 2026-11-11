@@ -1,7 +1,7 @@
 # Habilita los consumidores RabbitMQ de Catalog (tickets de cocina, q.cmd.kitchen), Report (boletas,
 # q.cmd.invoice) y Audit (auditoría de dead letters, q.audit.dead-letters). Sin este archivo esos
 # servicios no se conectan al broker. Requiere todos los archivos anteriores, en este orden:
-#   docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml up -d --build
+#   docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.events.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml up -d --build
 services:
   catalog:
     environment:

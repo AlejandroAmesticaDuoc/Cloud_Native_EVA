@@ -42,12 +42,18 @@ export function kafkaHarness({ dockerCommand, dockerInput, waitFor }) {
     await waitFor(async () => {
       try { await cli('kafka-topics', ['--list']); return true; } catch { return false; }
     }, 'inicio de Kafka', 120000);
-    await cli('kafka-topics', ['--create', '--if-not-exists', '--topic', 'orders.events',
-      '--partitions', '3', '--replication-factor', '1', '--config', 'retention.ms=604800000',
-      '--config', 'cleanup.policy=delete']);
+    // Mismos tópicos que infra/kafka/create-topics.sh, con una sola réplica (un broker de prueba).
+    const topics = [['orders.events', 'delete', '604800000'], ['audit.timeline', 'compact,delete', '2592000000'],
+      ['orders.events.audit.DLT', 'delete', '1209600000'], ['orders.events.report.DLT', 'delete', '1209600000'],
+      ['audit.timeline.report.DLT', 'delete', '1209600000']];
+    for (const [topic, cleanup, retention] of topics) {
+      await cli('kafka-topics', ['--create', '--if-not-exists', '--topic', topic, '--partitions', '3',
+        '--replication-factor', '1', '--config', `retention.ms=${retention}`, '--config', `cleanup.policy=${cleanup}`]);
+    }
     assertions++;
     return { ORDERS_EVENTS_ENABLED: 'true', ORDERS_EVENTS_POLL_DELAY: '100',
-      KAFKA_BOOTSTRAP_SERVERS: `127.0.0.1:${port}`, KAFKA_ORDERS_TOPIC: 'orders.events' };
+      KAFKA_BOOTSTRAP_SERVERS: `127.0.0.1:${port}`, KAFKA_ORDERS_TOPIC: 'orders.events',
+      KAFKA_TIMELINE_TOPIC: 'audit.timeline' };
   }
 
   async function readEvents() {

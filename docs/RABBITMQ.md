@@ -294,7 +294,10 @@ Requisitos: Docker Desktop con contenedores Linux y un `.env` en la raíz (copia
 | `compose.orders.yml` | Orders y su PostgreSQL |
 | `compose.rabbitmq.yml` | **RabbitMQ (clúster de dos nodos) y mq-admin**; se puede levantar solo |
 | `compose.notify.yml` | Notify, Mailpit y la publicación de Orders (usar junto a `compose.rabbitmq.yml`) |
-| `compose.kafka.yml` | Kafka KRaft y el inicializador del tópico |
+| `compose.kafka.yml` | Zookeeper, tres brokers Kafka y el inicializador de tópicos (ver [KAFKA.md](KAFKA.md)) |
+| `compose.events.yml` | Activa la publicación de Orders en Kafka |
+| `compose.kafka-ui.yml` | Kafka-UI (http://localhost:8090) |
+| `compose.kafka-admin.yml` | ms-pedidos360-kafka-admin (puerto 8087) |
 | `compose.audit.yml` / `compose.report.yml` | Audit y Report con sus bases |
 | `compose.commands.yml` | Activa los consumidores RabbitMQ de Catalog, Report y Audit |
 
@@ -302,8 +305,8 @@ Solución completa (PowerShell, desde la raíz; el orden de los `-f` importa):
 
 ```powershell
 Set-Location -LiteralPath 'D:\Cloud_Native_EVA'
-docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml up -d --build
-docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml ps
+docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.events.yml -f compose.kafka-ui.yml -f compose.kafka-admin.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml up -d --build
+docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.events.yml -f compose.kafka-ui.yml -f compose.kafka-admin.yml -f compose.audit.yml -f compose.report.yml -f compose.commands.yml ps
 ```
 
 Son 16 servicios: 15 contenedores activos (entre ellos los dos nodos de RabbitMQ) y el inicializador de Kafka, que termina con código 0.
@@ -338,7 +341,7 @@ function Api($method, $url, $token, $body) {
   if ($body) { $params.ContentType = 'application/json'; $params.Body = ($body | ConvertTo-Json -Depth 5) }
   Invoke-RestMethod @params
 }
-$compose = '-f','compose.postgres.yml','-f','compose.catalog.yml','-f','compose.orders.yml','-f','compose.rabbitmq.yml','-f','compose.notify.yml','-f','compose.kafka.yml','-f','compose.audit.yml','-f','compose.report.yml','-f','compose.commands.yml'
+$compose = '-f','compose.postgres.yml','-f','compose.catalog.yml','-f','compose.orders.yml','-f','compose.rabbitmq.yml','-f','compose.notify.yml','-f','compose.kafka.yml','-f','compose.events.yml','-f','compose.kafka-ui.yml','-f','compose.kafka-admin.yml','-f','compose.audit.yml','-f','compose.report.yml','-f','compose.commands.yml'
 ```
 
 1. **Clúster y topología.** `docker compose @compose exec rabbitmq rabbitmqctl cluster_status` (dos Running Nodes) o la consola en Overview › Nodes. Luego abrir `http://localhost:15672` (Exchanges y Queues) o consultar mq-admin:

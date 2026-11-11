@@ -4,7 +4,7 @@
 
 Orders publica eventos en `orders.events`. Audit registra la trazabilidad y Report calcula KPIs; ambos usan grupos Kafka y bases PostgreSQL independientes. La publicación no cambia las rutas HTTP de pedidos.
 
-Usamos Apache Kafka 4.3.1 en modo KRaft, sin ZooKeeper. Es un único broker local con tres particiones, factor de replicación 1 y retención de siete días. Esta configuración sirve para desarrollo y pruebas; no representa un despliegue seguro ni de alta disponibilidad para AWS.
+Desde la EP5 el clúster local es **Zookeeper + tres brokers** (Confluent 7.9.2 = Apache Kafka 3.9): `orders.events` tiene tres particiones, factor de replicación 3, `min.insync.replicas=2` y retención de siete días. Audit además publica `audit.timeline` y cada consumidor tiene su DLT. El diseño completo (tópicos, grupos, errores, administración y rúbrica) está en [KAFKA.md](KAFKA.md). La configuración local usa PLAINTEXT y no representa un despliegue seguro para AWS.
 
 ```text
 Pedido confirmado en Orders
@@ -89,48 +89,50 @@ Mantener las variables locales de [Orders](ORDERS_COMPLETO.md) y [Notify](NOTIFY
 
 ```dotenv
 KAFKA_PORT=9092
-KAFKA_CLUSTER_ID=cGVkaWRvczM2MC1rYWZrYQ
+KAFKA_2_PORT=9093
+KAFKA_3_PORT=9094
 KAFKA_ORDERS_TOPIC=orders.events
+KAFKA_TIMELINE_TOPIC=audit.timeline
+KAFKA_UI_USERNAME=<usuario>
+KAFKA_UI_PASSWORD=<contraseña>
 ```
-
-`KAFKA_CLUSTER_ID` identifica el clúster local, no es una contraseña. No cambiarlo mientras se conserve el volumen de ese clúster.
 
 Desde la raíz:
 
 ```powershell
 Set-Location -LiteralPath 'D:\Cloud_Native_EVA'
-docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.notify.yml -f compose.kafka.yml up -d --build
-docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.notify.yml -f compose.kafka.yml ps -a
+docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.events.yml up -d --build
+docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.events.yml ps -a
 ```
 
-Hay nueve contenedores de ejecución continua y un inicializador. `kafka-init` crea `orders.events` si no existe y debe terminar con código `0`; no es un error que aparezca detenido. No modifica la configuración de un tópico que ya exista. Orders no crea tópicos automáticamente ni depende de que Kafka esté disponible para iniciar.
+`kafka-init` crea o actualiza los tópicos (`infra/kafka/create-topics.sh`) y debe terminar con código `0`; no es un error que aparezca detenido. `compose.events.yml` activa la publicación de Orders. Orders no crea tópicos automáticamente ni depende de que Kafka esté disponible para iniciar. `compose.kafka.yml` también se puede levantar solo (con `compose.kafka-ui.yml` y `compose.kafka-admin.yml`).
 
-Dentro de Docker, Orders usa `kafka:19092`. Para ejecutar Orders desde Windows, exportar estas variables en su terminal:
+Dentro de Docker, los servicios usan `kafka-1:19092,kafka-2:19092,kafka-3:19092`. Para ejecutar Orders desde Windows, exportar estas variables en su terminal:
 
 ```powershell
 $env:ORDERS_EVENTS_ENABLED = 'true'
-$env:KAFKA_BOOTSTRAP_SERVERS = 'localhost:9092'
+$env:KAFKA_BOOTSTRAP_SERVERS = 'localhost:9092,localhost:9093,localhost:9094'
 $env:KAFKA_ORDERS_TOPIC = 'orders.events'
 ```
 
-Si cambias `KAFKA_PORT`, usa ese mismo puerto en `KAFKA_BOOTSTRAP_SERVERS` al ejecutar desde Windows. Spring Boot no carga `.env` automáticamente. Para levantar Kafka sin Notify, omitir únicamente `-f compose.notify.yml`.
+Si cambias `KAFKA_PORT`, `KAFKA_2_PORT` o `KAFKA_3_PORT`, usa esos mismos puertos en `KAFKA_BOOTSTRAP_SERVERS`. Spring Boot no carga `.env` automáticamente.
 
-Kafka solo publica su puerto externo en `127.0.0.1`. Los listeners internos no se publican al host. Esta configuración local utiliza PLAINTEXT, sin autenticación: antes de AWS hay que definir TLS, autenticación, permisos por servicio y acceso por red privada. No exponer `9092` a Internet.
+Kafka solo publica sus puertos externos en `127.0.0.1`. Los listeners internos no se publican al host. Esta configuración local utiliza PLAINTEXT, sin autenticación: antes de AWS hay que definir TLS, autenticación, permisos por servicio y acceso por red privada. No exponer `9092` a Internet.
 
 ## Ver los eventos
 
 Después de crear o modificar pedidos mediante la colección Postman y tokens válidos:
 
 ```powershell
-docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.notify.yml -f compose.kafka.yml exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:19092 --topic orders.events --from-beginning --property print.key=true --property print.partition=true
+docker compose -f compose.kafka.yml exec kafka-1 kafka-console-consumer --bootstrap-server kafka-1:19092 --topic orders.events --from-beginning --property print.key=true --property print.partition=true
 ```
 
-El consumidor queda esperando mensajes nuevos. Detenerlo con `Ctrl+C`; esto no detiene Kafka ni borra eventos. Es una inspección manual, no reemplaza a Audit o Report.
+El consumidor queda esperando mensajes nuevos. Detenerlo con `Ctrl+C`; esto no detiene Kafka ni borra eventos. Es una inspección manual, no reemplaza a Audit o Report. También se pueden ver en Kafka-UI (http://localhost:8090).
 
 Detener los servicios sin borrar datos:
 
 ```powershell
-docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.notify.yml -f compose.kafka.yml stop
+docker compose -f compose.postgres.yml -f compose.catalog.yml -f compose.orders.yml -f compose.rabbitmq.yml -f compose.notify.yml -f compose.kafka.yml -f compose.events.yml stop
 ```
 
 No usar `down -v` ni restablecer Docker a valores de fábrica para solucionar errores normales: los volúmenes contienen las bases, colas y eventos.

@@ -29,22 +29,29 @@ const environment = { ...process.env,
   RABBITMQ_EMAIL_DLQ: 'q.cmd.email.dlq', API_DOCS_ENABLED: 'false'
 };
 for (const key of ['POSTGRES_PORT', 'ORDERS_POSTGRES_PORT', 'BFF_PORT', 'CATALOG_PORT', 'ORDERS_PORT',
-  'REPORT_PORT', 'REPORT_POSTGRES_PORT', 'AUDIT_PORT', 'AUDIT_POSTGRES_PORT', 'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'RABBITMQ_2_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT', 'MQ_ADMIN_PORT']) environment[key] = '0';
+  'REPORT_PORT', 'REPORT_POSTGRES_PORT', 'AUDIT_PORT', 'AUDIT_POSTGRES_PORT', 'NOTIFY_PORT', 'RABBITMQ_PORT', 'RABBITMQ_MANAGEMENT_PORT', 'RABBITMQ_2_MANAGEMENT_PORT', 'MAILPIT_PORT', 'MAILPIT_SMTP_PORT', 'MQ_ADMIN_PORT', 'KAFKA_UI_PORT', 'KAFKA_ADMIN_PORT']) environment[key] = '0';
 if (withKafka) {
-  const probe = createServer();
-  await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
-  environment.KAFKA_PORT = String(probe.address().port);
-  await new Promise(resolve => probe.close(resolve));
-  delete environment.KAFKA_CLUSTER_ID;
+  // Cada broker anuncia su listener EXTERNAL con el puerto publicado: se reservan tres puertos libres.
+  for (const key of ['KAFKA_PORT', 'KAFKA_2_PORT', 'KAFKA_3_PORT']) {
+    const probe = createServer();
+    await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
+    environment[key] = String(probe.address().port);
+    await new Promise(resolve => probe.close(resolve));
+  }
   environment.KAFKA_ORDERS_TOPIC = 'orders.events';
+  environment.KAFKA_TIMELINE_TOPIC = 'audit.timeline';
+  environment.KAFKA_UI_USERNAME = 'compose-test';
+  environment.KAFKA_UI_PASSWORD = randomBytes(24).toString('hex');
 }
+const kafkaBootstrap = 'kafka-1:19092,kafka-2:19092,kafka-3:19092';
 if (docker !== 'docker') {
   const pathKey = Object.keys(environment).find(key => key.toLowerCase() === 'path') || 'PATH';
   environment[pathKey] = dirname(docker) + delimiter + (environment[pathKey] || '');
 }
 const compose = ['compose', '--env-file', '.env.example', '-p', project,
   '-f', 'compose.postgres.yml', '-f', 'compose.catalog.yml', '-f', 'compose.orders.yml', '-f', 'compose.rabbitmq.yml', '-f', 'compose.notify.yml'];
-if (withKafka) compose.push('-f', 'compose.kafka.yml');
+if (withKafka) compose.push('-f', 'compose.kafka.yml', '-f', 'compose.events.yml', '-f', 'compose.kafka-ui.yml',
+  '-f', 'compose.kafka-admin.yml');
 if (withAudit) compose.push('-f', 'compose.audit.yml');
 if (withReport) compose.push('-f', 'compose.report.yml');
 
@@ -77,21 +84,27 @@ async function ready(service, port) {
 try {
   console.log('Validando Compose y construyendo las imágenes de la solución...');
   const configuration = JSON.parse(await run([...compose, 'config', '--format', 'json']));
-  assert.equal(Object.keys(configuration.services).length, withReport ? 16 : withAudit ? 14 : withKafka ? 12 : 10);
+  assert.equal(Object.keys(configuration.services).length, withReport ? 21 : withAudit ? 19 : withKafka ? 17 : 10);
   for (const service of Object.values(configuration.services)) {
     for (const port of service.ports || []) assert.equal(port.host_ip, '127.0.0.1');
   }
   assert.equal(configuration.services.notify.environment.SMTP_HOST, 'mailpit');
   assert.equal(configuration.services.orders.environment.ORDERS_NOTIFICATIONS_ENABLED, 'true');
-  if (withKafka) assert.match(configuration.services.kafka.environment.CLUSTER_ID, /^[A-Za-z0-9_-]{22}$/);
+  if (withKafka) {
+    for (const broker of ['kafka-1', 'kafka-2', 'kafka-3']) {
+      assert.equal(configuration.services[broker].environment.KAFKA_ZOOKEEPER_CONNECT, 'zookeeper:2181');
+      assert.equal(String(configuration.services[broker].environment.KAFKA_MIN_INSYNC_REPLICAS), '2');
+    }
+    assert.equal(configuration.services.orders.environment.KAFKA_BOOTSTRAP_SERVERS, kafkaBootstrap);
+  }
   if (withAudit) {
-    assert.equal(configuration.services.audit.environment.KAFKA_BOOTSTRAP_SERVERS, 'kafka:19092');
+    assert.equal(configuration.services.audit.environment.KAFKA_BOOTSTRAP_SERVERS, kafkaBootstrap);
     assert.equal(configuration.services.audit.environment.AUDIT_EVENTS_ENABLED, 'true');
     assert.equal(configuration.services.bff.environment.AUDIT_SERVICE_URL, 'http://audit:8085');
     assert.equal(configuration.services.audit.environment.AUDIT_DB_USERNAME, 'pedidos360_audit');
   }
   if (withReport) {
-    assert.equal(configuration.services.report.environment.KAFKA_BOOTSTRAP_SERVERS, 'kafka:19092');
+    assert.equal(configuration.services.report.environment.KAFKA_BOOTSTRAP_SERVERS, kafkaBootstrap);
     assert.equal(configuration.services.report.environment.REPORT_EVENTS_ENABLED, 'true');
     assert.equal(configuration.services.bff.environment.REPORT_SERVICE_URL, 'http://report:8084');
     assert.equal(configuration.services.report.environment.REPORT_DB_USERNAME, 'pedidos360_report');
@@ -101,6 +114,7 @@ try {
   await run([...compose, 'up', '-d', '--build'], 600000);
   console.log('Comprobando salud y ejecución sin root de los servicios Java...');
   const javaServices = [['bff', 8080], ['catalog', 8082], ['orders', 8081], ['notify', 8083], ['mq-admin', 8086]];
+  if (withKafka) javaServices.push(['kafka-admin', 8087]);
   if (withAudit) javaServices.push(['audit', 8085]);
   if (withReport) javaServices.push(['report', 8084]);
   for (const [service, port] of javaServices) {
@@ -111,22 +125,30 @@ try {
     console.log(`${service}: UP, usuario 10001`);
   }
   if (withKafka) {
-    const id = await run([...compose, 'ps', '-q', 'kafka']);
+    const id = await run([...compose, 'ps', '-q', 'kafka-1']);
     assert.match(id, /^[a-f0-9]{64}$/);
-    const topic = await run(['exec', id, '/opt/kafka/bin/kafka-topics.sh',
-      '--bootstrap-server', 'kafka:19092', '--describe', '--topic', 'orders.events']);
+    const topic = await run(['exec', id, 'kafka-topics',
+      '--bootstrap-server', 'kafka-1:19092', '--describe', '--topic', 'orders.events']);
     assert.match(topic, /PartitionCount:\s*3/);
-    assert.equal(configuration.services.orders.environment.KAFKA_BOOTSTRAP_SERVERS, 'kafka:19092');
+    assert.match(topic, /ReplicationFactor:\s*3/);
+    assert.match(topic, /min\.insync\.replicas=2/);
+    const timeline = await run(['exec', id, 'kafka-topics',
+      '--bootstrap-server', 'kafka-1:19092', '--describe', '--topic', 'audit.timeline']);
+    assert.match(timeline, /cleanup\.policy=compact,delete/);
+    const ui = await run([...compose, 'port', 'kafka-ui', '8080']);
+    assert.match(ui, /^127\.0\.0\.1:\d+$/);
+    const login = await fetch(`http://${ui}/auth`, { signal: AbortSignal.timeout(10000) });
+    assert.equal(login.status, 200);
     const initializer = await run([...compose, 'ps', '-a', '-q', 'kafka-init']);
     assert.match(initializer, /^[a-f0-9]{64}$/);
     assert.equal(await run(['inspect', '--format', '{{.State.ExitCode}}', initializer]), '0');
-    console.log('Kafka: tópico orders.events creado con tres particiones.');
+    console.log('Kafka: Zookeeper + 3 brokers, orders.events (3 particiones, RF 3) y audit.timeline compactado; Kafka-UI responde.');
   }
-  console.log(`SUCCESS: ${withReport ? 'quince contenedores activos y un inicializador' : withAudit ? 'trece contenedores activos y un inicializador' : withKafka ? 'once contenedores activos y un inicializador' : 'diez contenedores'}; ${javaServices.length} servicios Java verificados en Docker Compose.`);
+  console.log(`SUCCESS: ${withReport ? 'veinte contenedores activos y un inicializador' : withAudit ? 'dieciocho contenedores activos y un inicializador' : withKafka ? 'dieciséis contenedores activos y un inicializador' : 'diez contenedores'}; ${javaServices.length} servicios Java verificados en Docker Compose.`);
 } catch (error) {
   console.error(error.message);
   try {
-    console.error(await run([...compose, 'logs', '--no-color', '--tail', '35', 'rabbitmq', 'rabbitmq-2', ...(withKafka ? ['kafka'] : [])]));
+    console.error(await run([...compose, 'logs', '--no-color', '--tail', '35', 'rabbitmq', 'rabbitmq-2', ...(withKafka ? ['kafka-1', 'kafka-init'] : [])]));
   } catch {}
   process.exitCode = 1;
 } finally {

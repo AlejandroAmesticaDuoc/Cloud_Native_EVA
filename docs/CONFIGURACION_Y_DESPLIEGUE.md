@@ -136,7 +136,7 @@ El despliegue completo sigue pendiente de infraestructura. La solución planific
 - PostgreSQL, si se decide administrarlo en contenedor en ese ambiente.
 - Notify y Mailpit para probar correos localmente.
 - RabbitMQ y mq-admin, su administrador REST (puerto 8086).
-- Kafka en modo KRaft, sin ZooKeeper.
+- Kafka 3.9 con Zookeeper y tres brokers, Kafka-UI y ms-pedidos360-kafka-admin (ver [KAFKA.md](KAFKA.md)).
 - Audit y Report, cada uno con su propia base PostgreSQL y grupo Kafka.
 
 Las URLs internas utilizarán el nombre del servicio Docker.
@@ -152,7 +152,7 @@ No se deben escribir direcciones IP fijas en el código.
 
 En AWS, RabbitMQ (5672) y las consolas de sus dos nodos (15672 y 15673) no deben quedar expuestos a Internet, igual que mq-admin (8086) y los puertos internos del clúster (4369 y 25672, que el compose no publica): son componentes internos. Para la demo, acceder a las consolas con un túnel SSH, por ejemplo `ssh -L 15672:127.0.0.1:15672 -L 15673:127.0.0.1:15673 <usuario>@<ec2>`. Usar credenciales propias del ambiente, no las locales, y revisar usuarios por servicio con permisos mínimos.
 
-Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; dentro de Docker, Catalog usa `postgres:5432`, Orders usa `postgres-orders:5432`, Audit usa `postgres-audit:5432` y Report usa `postgres-report:5432`. Los archivos locales deben combinarse en un solo comando, no iniciarse como proyectos separados. Para RabbitMQ y mq-admin se agrega `-f compose.rabbitmq.yml` (también se puede levantar solo); Notify y Mailpit se agregan con `-f compose.notify.yml`, siempre después de `compose.rabbitmq.yml`; para Kafka se suma `-f compose.kafka.yml`; para Audit se añade `-f compose.audit.yml`; para Report se agrega `-f compose.report.yml`; y `-f compose.commands.yml`, al final, activa los consumidores RabbitMQ de Catalog, Report y Audit. Dentro de Docker los servicios usan `rabbitmq:5672` y mq-admin usa `http://rabbitmq:15672` para la API de management; desde Windows, `localhost:5672` y `localhost:15672`. Ver [RabbitMQ en Pedidos360](RABBITMQ.md), [Notificaciones](NOTIFY_RABBITMQ.md), [Eventos Kafka](KAFKA_EVENTOS.md), [Audit](AUDIT_COMPLETO.md) y [Report](REPORT_COMPLETO.md).
+Para PostgreSQL, una aplicación ejecutada en Windows usa `localhost`; dentro de Docker, Catalog usa `postgres:5432`, Orders usa `postgres-orders:5432`, Audit usa `postgres-audit:5432` y Report usa `postgres-report:5432`. Los archivos locales deben combinarse en un solo comando, no iniciarse como proyectos separados. Para RabbitMQ y mq-admin se agrega `-f compose.rabbitmq.yml` (también se puede levantar solo); Notify y Mailpit se agregan con `-f compose.notify.yml`, siempre después de `compose.rabbitmq.yml`; para Kafka se suman `-f compose.kafka.yml -f compose.events.yml` (y opcionalmente `-f compose.kafka-ui.yml -f compose.kafka-admin.yml`); para Audit se añade `-f compose.audit.yml`; para Report se agrega `-f compose.report.yml`; y `-f compose.commands.yml`, al final, activa los consumidores RabbitMQ de Catalog, Report y Audit. Dentro de Docker los servicios usan `rabbitmq:5672` y mq-admin usa `http://rabbitmq:15672` para la API de management; desde Windows, `localhost:5672` y `localhost:15672`. Ver [RabbitMQ en Pedidos360](RABBITMQ.md), [Notificaciones](NOTIFY_RABBITMQ.md), [Eventos Kafka](KAFKA_EVENTOS.md), [Audit](AUDIT_COMPLETO.md) y [Report](REPORT_COMPLETO.md).
 
 ## Despliegue AWS
 
