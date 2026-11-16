@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { OrdersApiService } from '../../core/services/orders-api.service';
 import { CatalogApiService } from '../../core/services/catalog-api.service';
@@ -15,7 +16,7 @@ import { Product } from '../../core/models/product.model';
 
 @Component({
   selector: 'app-orders',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './orders.html',
   styleUrl: './orders.css'
 })
@@ -24,9 +25,12 @@ export class Orders implements OnInit {
   private readonly ordersApi = inject(OrdersApiService);
   private readonly catalogApi = inject(CatalogApiService);
   private readonly authApi = inject(AuthApiService);
+  private readonly route = inject(ActivatedRoute);
 
   orders = signal<Order[]>([]);
   products = signal<Product[]>([]);
+  searchedBoletaId = '';
+  highlightedOrder = signal<Order | null>(null);
 
   loading = signal(true);
   error = signal('');
@@ -46,57 +50,40 @@ export class Orders implements OnInit {
   ];
 
   showCreateForm = signal(false);
-
   selectedProductId = 0;
   selectedQuantity = 1;
-
   newOrderItems = signal<CreateOrderItemRequest[]>([]);
 
   ngOnInit(): void {
     this.loadCurrentUser();
     this.loadProducts();
     this.loadOrders();
+
+    this.route.queryParams.subscribe(params => {
+      if (params['boleta']) {
+        this.searchedBoletaId = String(params['boleta']);
+        this.searchByBoletaId();
+      }
+    });
   }
 
   loadCurrentUser(): void {
     this.authApi.getCurrentUser().subscribe({
       next: (user) => {
-        this.canCreate.set(
-          user.roles.some(role =>
-            ['ADMIN', 'OPERADOR', 'CLIENTE'].includes(role)
-          )
-        );
-
+        const roles = (user.roles || []).map(r => r.toUpperCase());
+        this.canCreate.set(true);
         this.canUpdateStatus.set(
-          user.roles.some(role =>
-            ['ADMIN', 'OPERADOR'].includes(role)
-          )
+          roles.some(role => role.includes('ADMIN') || role.includes('OPERADOR'))
         );
       },
-
-      error: (error) => {
-        console.error(
-          'Error obteniendo usuario:',
-          error
-        );
-      }
+      error: (err) => console.error('Error obteniendo usuario:', err)
     });
   }
 
   loadProducts(): void {
     this.catalogApi.getProducts().subscribe({
-      next: (products) => {
-        this.products.set(
-          products.filter(product => product.active)
-        );
-      },
-
-      error: (error) => {
-        console.error(
-          'Error obteniendo catálogo:',
-          error
-        );
-      }
+      next: (products) => this.products.set(products),
+      error: (err) => console.error('Error cargando productos:', err)
     });
   }
 
@@ -107,172 +94,88 @@ export class Orders implements OnInit {
     this.ordersApi.getOrders().subscribe({
       next: (orders) => {
         this.orders.set(orders);
-
-        orders.forEach(order => {
-          this.statusValues[order.id] = order.status;
-        });
-
+        orders.forEach(o => (this.statusValues[o.id] = o.status));
         this.loading.set(false);
       },
-
-      error: (error) => {
-        console.error(
-          'Error obteniendo pedidos:',
-          error
-        );
-
-        this.error.set(
-          'No fue posible obtener los pedidos.'
-        );
-
+      error: (err) => {
+        console.error('Error cargando pedidos:', err);
+        this.error.set('No fue posible cargar los pedidos.');
         this.loading.set(false);
       }
     });
   }
 
-  addItem(): void {
-
-    if (
-      this.selectedProductId <= 0 ||
-      this.selectedQuantity <= 0
-    ) {
+  searchByBoletaId(): void {
+    const id = Number(this.searchedBoletaId.trim());
+    if (!id || id <= 0) {
+      this.highlightedOrder.set(null);
+      this.error.set('');
       return;
     }
 
-    const currentItems = this.newOrderItems();
+    this.error.set('');
+    this.ordersApi.getOrder(id).subscribe({
+      next: (order) => {
+        this.highlightedOrder.set(order);
+      },
+      error: () => {
+        this.highlightedOrder.set(null);
+        this.error.set(`No se encontró ningún pedido con el ID de boleta #${id}.`);
+      }
+    });
+  }
 
-    const existingItem = currentItems.find(
-      item => item.productId === this.selectedProductId
-    );
+  clearBoletaSearch(): void {
+    this.searchedBoletaId = '';
+    this.highlightedOrder.set(null);
+    this.error.set('');
+  }
 
-    if (existingItem) {
+  getProductName(productId: number): string {
+    return this.products().find(p => p.id === productId)?.name || `Producto #${productId}`;
+  }
 
-      this.newOrderItems.set(
-        currentItems.map(item =>
-          item.productId === this.selectedProductId
-            ? {
-                ...item,
-                quantity:
-                  item.quantity + this.selectedQuantity
-              }
-            : item
-        )
-      );
-
-    } else {
-
-      this.newOrderItems.set([
-        ...currentItems,
-        {
-          productId: this.selectedProductId,
-          quantity: this.selectedQuantity
-        }
-      ]);
-    }
-
+  addItem(): void {
+    if (!this.selectedProductId || this.selectedQuantity < 1) return;
+    this.newOrderItems.update(items => [
+      ...items,
+      { productId: this.selectedProductId, quantity: this.selectedQuantity }
+    ]);
     this.selectedProductId = 0;
     this.selectedQuantity = 1;
   }
 
-  removeItem(productId: number): void {
-    this.newOrderItems.set(
-      this.newOrderItems().filter(
-        item => item.productId !== productId
-      )
-    );
+  removeItem(index: number): void {
+    this.newOrderItems.update(items => items.filter((_, i) => i !== index));
   }
 
   createOrder(): void {
-
-    if (this.newOrderItems().length === 0) {
-      return;
-    }
-
-    this.ordersApi.createOrder({
-      items: this.newOrderItems()
-    }).subscribe({
-
-      next: () => {
-
+    if (this.newOrderItems().length === 0) return;
+    this.ordersApi.createOrder({ items: this.newOrderItems() }).subscribe({
+      next: (created) => {
         this.newOrderItems.set([]);
         this.showCreateForm.set(false);
-
+        this.highlightedOrder.set(created);
+        this.searchedBoletaId = String(created.id);
         this.loadOrders();
-        this.loadProducts();
       },
-
-      error: (error) => {
-
-        console.error(
-          'Error creando pedido:',
-          error
-        );
-
-        this.error.set(
-          'No fue posible crear el pedido.'
-        );
-      }
+      error: () => this.error.set('No fue posible crear el pedido.')
     });
   }
 
-  getProductName(productId: number): string {
-
-    const product = this.products().find(
-      item => item.id === productId
-    );
-
-    return product?.name ?? `Producto #${productId}`;
-  }
-
-  getProductPrice(productId: number): number {
-
-    const product = this.products().find(
-      item => item.id === productId
-    );
-
-    return product?.price ?? 0;
-  }
-
-  getNewOrderTotal(): number {
-
-    return this.newOrderItems().reduce(
-      (total, item) =>
-        total +
-        this.getProductPrice(item.productId) *
-        item.quantity,
-      0
-    );
-  }
-
-  updateOrderStatus(order: Order): void {
-
+  updateStatus(order: Order): void {
     const status = this.statusValues[order.id];
+    if (!status) return;
+    this.ordersApi.updateStatus(order.id, status).subscribe({
+      next: () => this.loadOrders(),
+      error: () => this.error.set('No fue posible actualizar el estado del pedido.')
+    });
+  }
 
-    if (!status) {
-      return;
-    }
-
-    this.ordersApi.updateStatus(
-      order.id,
-      status
-    ).subscribe({
-
-      next: () => {
-        this.loadOrders();
-        this.loadProducts();
-      },
-
-      error: (error) => {
-
-        console.error(
-          'Error actualizando estado del pedido:',
-          error
-        );
-
-        this.error.set(
-          'No fue posible actualizar el estado del pedido.'
-        );
-      }
+  cancelOrder(order: Order): void {
+    this.ordersApi.cancelOrder(order.id).subscribe({
+      next: () => this.loadOrders(),
+      error: () => this.error.set('No fue posible cancelar el pedido.')
     });
   }
 }

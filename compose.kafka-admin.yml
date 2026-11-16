@@ -1,0 +1,8 @@
+services:
+  kafka-admin:
+    build: ./ms-pedidos360-kafka-admin
+    environment:
+      KAFKA_ADMIN_PORT: 8087
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-54.163.42.80:9092}
+    ports:
+      - "127.0.0.1:8087:8087"

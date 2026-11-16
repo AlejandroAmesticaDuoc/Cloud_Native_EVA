@@ -30,15 +30,13 @@ services:
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       AUDIT_EVENTS_ENABLED: "true"
       AUDIT_KAFKA_GROUP: ${AUDIT_KAFKA_GROUP:-pedidos360-audit-v1}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
       KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
     ports:
       - "127.0.0.1:${AUDIT_PORT:-8085}:8085"
     depends_on:
       postgres-audit:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
 
   bff:
     environment:

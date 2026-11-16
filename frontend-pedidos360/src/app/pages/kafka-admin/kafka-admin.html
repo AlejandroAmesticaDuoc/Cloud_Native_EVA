@@ -1,0 +1,199 @@
+<div class="kafka-container">
+
+  <div class="header">
+    <div>
+      <a routerLink="/dashboard" class="back-link">← Volver al Dashboard</a>
+      <h1>Administración de Kafka</h1>
+      <p>Gestión de tópicos, particiones, consumer groups y publicación de eventos (ms-pedidos360-kafka-admin)</p>
+    </div>
+
+    <div class="header-buttons">
+      @if (isAdmin()) {
+        <button type="button" (click)="showCreateForm.set(!showCreateForm())">
+          {{ showCreateForm() ? 'Cerrar formulario' : '+ Nuevo tópico' }}
+        </button>
+      }
+      <button type="button" class="secondary-btn" (click)="refreshAll()">
+        Actualizar
+      </button>
+    </div>
+  </div>
+
+  @if (feedback()) {
+    <div class="feedback-banner">{{ feedback() }}</div>
+  }
+
+  @if (error()) {
+    <div class="error-banner">{{ error() }}</div>
+  }
+
+  @if (showCreateForm() && isAdmin()) {
+    <section class="card form-card">
+      <h2>Crear nuevo tópico</h2>
+      <div class="form-grid">
+        <label>
+          Nombre del tópico
+          <input type="text" [(ngModel)]="newTopic.name" placeholder="ej. pedidos360.custom.events">
+        </label>
+        <label>
+          Particiones
+          <input type="number" min="1" [(ngModel)]="newTopic.partitions">
+        </label>
+        <label>
+          Factor de replicación
+          <input type="number" min="1" [(ngModel)]="newTopic.replicationFactor">
+        </label>
+        <label>
+          Retención (ms)
+          <input type="text" [(ngModel)]="newTopic.retentionMs">
+        </label>
+        <label>
+          Cleanup Policy
+          <select [(ngModel)]="newTopic.cleanupPolicy">
+            <option value="delete">delete</option>
+            <option value="compact">compact</option>
+          </select>
+        </label>
+      </div>
+      <button type="button" (click)="createTopic()">Crear tópico</button>
+    </section>
+  }
+
+  @if (loading()) {
+    <p class="loading-msg">Cargando información del clúster Kafka...</p>
+  } @else {
+
+    <!-- TÓPICOS -->
+    <section class="card">
+      <h2>Tópicos ({{ topics().length }})</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Tópico</th>
+              <th>Particiones</th>
+              <th>Replicación</th>
+              <th>Retención (ms)</th>
+              <th>Policy</th>
+              <th>Tipo</th>
+              @if (isAdmin()) {
+                <th>Acciones</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (topic of topics(); track topic.name) {
+              <tr>
+                <td><strong>{{ topic.name }}</strong></td>
+                <td>{{ topic.partitions }}</td>
+                <td>{{ topic.replicationFactor }}</td>
+                <td>{{ topic.retentionMs }}</td>
+                <td>{{ topic.cleanupPolicy }}</td>
+                <td>
+                  <span [class]="topic.protectedTopic ? 'badge badge-protected' : 'badge badge-custom'">
+                    {{ topic.protectedTopic ? 'Protegido' : 'Personalizado' }}
+                  </span>
+                </td>
+                @if (isAdmin()) {
+                  <td class="actions-cell">
+                    <button type="button" class="small-btn" (click)="startEdit(topic)">Configurar</button>
+                    @if (!topic.protectedTopic) {
+                      <button type="button" class="small-btn danger-btn" (click)="deleteTopic(topic)">Eliminar</button>
+                    }
+                  </td>
+                }
+              </tr>
+
+              @if (editingTopicName() === topic.name && isAdmin()) {
+                <tr class="edit-row">
+                  <td colspan="7">
+                    <div class="inline-edit">
+                      <label>
+                        Particiones (mín. actual: {{ topic.partitions }})
+                        <input type="number" [min]="topic.partitions" [(ngModel)]="editConfig.newPartitionCount">
+                      </label>
+                      <label>
+                        Retención (ms)
+                        <input type="text" [(ngModel)]="editConfig.retentionMs">
+                      </label>
+                      <label>
+                        Cleanup Policy
+                        <select [(ngModel)]="editConfig.cleanupPolicy">
+                          <option value="delete">delete</option>
+                          <option value="compact">compact</option>
+                        </select>
+                      </label>
+                      <button type="button" class="small-btn" (click)="saveTopicConfig(topic)">Guardar</button>
+                      <button type="button" class="small-btn secondary-btn" (click)="cancelEdit()">Cancelar</button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- CONSUMER GROUPS -->
+    <section class="card">
+      <h2>Consumer Groups ({{ consumerGroups().length }})</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Group ID</th>
+              <th>Estado</th>
+              <th>Miembros</th>
+              <th>Tópicos asignados</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (group of consumerGroups(); track group.groupId) {
+              <tr>
+                <td><strong>{{ group.groupId }}</strong></td>
+                <td><span class="badge badge-state">{{ group.state }}</span></td>
+                <td>{{ group.memberCount }}</td>
+                <td>{{ group.assignedTopics.join(', ') || 'Sin tópicos' }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="4">No hay consumer groups activos.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PUBLICAR MENSAJE -->
+    @if (isAdmin()) {
+      <section class="card">
+        <h2>Publicar mensaje de prueba</h2>
+        <div class="form-grid">
+          <label>
+            Tópico destino
+            <select [(ngModel)]="messageForm.topic">
+              @for (topic of topics(); track topic.name) {
+                <option [value]="topic.name">{{ topic.name }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            Key
+            <input type="text" [(ngModel)]="messageForm.key">
+          </label>
+          <label>
+            Event Type
+            <input type="text" [(ngModel)]="messageForm.eventType">
+          </label>
+        </div>
+        <label class="full-width">
+          Payload (JSON)
+          <textarea rows="3" [(ngModel)]="messageForm.payload"></textarea>
+        </label>
+        <button type="button" (click)="publishMessage()">Publicar evento</button>
+      </section>
+    }
+  }
+</div>

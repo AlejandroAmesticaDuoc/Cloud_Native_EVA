@@ -1,235 +1,294 @@
-<div class="catalog-container">
+<div class="catalog-page" [class.client-tech-theme]="!isAdmin()">
+  <div class="catalog-container">
 
-  <div class="header">
-    <div>
-      <h1>Catálogo</h1>
-      <p>Productos disponibles en Pedidos360</p>
-    </div>
-
-    <button (click)="loadProducts()">
-      Actualizar
-    </button>
-  </div>
-
-  @if (isAdmin()) {
-
-    <div class="admin-actions">
-
-      <button
-        type="button"
-        (click)="showCreateForm.set(!showCreateForm())"
-      >
-        Nuevo producto
-      </button>
-
-    </div>
-
-    @if (showCreateForm()) {
-
-      <div class="create-form">
-
-        <h2>Crear producto</h2>
-
-        <label>
-          Nombre
-          <input
-            type="text"
-            [(ngModel)]="newProduct.name"
-            maxlength="100"
-          >
-        </label>
-
-        <label>
-          Precio
-          <input
-            type="number"
-            [(ngModel)]="newProduct.price"
-            min="0.01"
-            step="0.01"
-          >
-        </label>
-
-        <label>
-          Stock
-          <input
-            type="number"
-            [(ngModel)]="newProduct.stock"
-            min="0"
-          >
-        </label>
-
-        <button
-          type="button"
-          (click)="createProduct()"
-        >
-          Guardar producto
-        </button>
-
+    <!-- BARRA SUPERIOR -->
+    <div class="topbar">
+      <div class="nav-links">
+        <a routerLink="/dashboard" class="nav-pill">← Dashboard</a>
+        <a routerLink="/orders" class="nav-pill">🧾 Consultar Boletas / Pedidos</a>
       </div>
 
+      <div class="topbar-right">
+        <span class="role-badge">
+          {{ isAdmin() ? '🛡️ Modo Administrador' : '🛍️ Modo Cliente' }}
+        </span>
+
+        <button type="button" class="cart-toggle-btn" (click)="cartOpen.set(!cartOpen())">
+          🛒 Carrito ({{ cartTotalItems() }}) · ${{ cartTotalAmount().toLocaleString('es-CL') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- ENCABEZADO -->
+    <div class="header">
+      <div>
+        <span class="eyebrow">TIENDA OFICIAL PEDIDOS360</span>
+        <h1>Catálogo de Productos</h1>
+        <p>
+          {{ isAdmin()
+            ? 'Administra el inventario, precios y disponibilidad de los productos.'
+            : 'Agrega productos a tu carrito de compras, finaliza tu pedido y obtén tu ID de boleta.' }}
+        </p>
+      </div>
+
+      <div class="header-actions">
+        @if (isAdmin()) {
+          <button type="button" class="btn-primary" (click)="showCreateForm.set(!showCreateForm())">
+            {{ showCreateForm() ? 'Cerrar formulario' : '+ Nuevo producto' }}
+          </button>
+        }
+        <button type="button" class="btn-secondary" (click)="loadProducts()">
+          ↻ Actualizar
+        </button>
+      </div>
+    </div>
+
+    <!-- COMPROBANTE DE BOLETA GENERADA -->
+    @if (lastCreatedOrder(); as receipt) {
+      <div class="receipt-banner">
+        <div>
+          <span class="receipt-tag">COMPROBANTE DE COMPRA ELECTRÓNICO</span>
+          <h3>Boleta / Pedido N° #{{ receipt.id }} generado</h3>
+          <p>
+            Estado: <strong>{{ receipt.status }}</strong> · Total pagado:
+            <strong>${{ receipt.total.toLocaleString('es-CL') }}</strong>
+          </p>
+        </div>
+        <div class="receipt-actions">
+          <a [routerLink]="['/orders']" [queryParams]="{ boleta: receipt.id }" class="btn-receipt">
+            Ver detalle por ID #{{ receipt.id }} →
+          </a>
+          <button type="button" class="btn-close-receipt" (click)="lastCreatedOrder.set(null)">✕</button>
+        </div>
+      </div>
     }
 
-  }
+    <!-- MENSAJES -->
+    @if (feedbackMessage()) {
+      <div class="alert alert-success">
+        <span>✅ {{ feedbackMessage() }}</span>
+      </div>
+    }
 
-  @if (loading()) {
-    <p class="message">
-      Cargando catálogo...
-    </p>
-  }
+    @if (error()) {
+      <div class="alert alert-error">⚠️ {{ error() }}</div>
+    }
 
-  @if (error()) {
-    <div class="error">
-      {{ error() }}
-    </div>
-  }
+    <!-- PANEL DE CARRITO DE COMPRAS -->
+    @if (cartOpen()) {
+      <section class="cart-panel">
+        <div class="cart-header">
+          <div>
+            <h2>🛒 Tu Carrito de Compras</h2>
+            <p>{{ cartTotalItems() }} producto(s) seleccionados</p>
+          </div>
+          <div class="cart-header-actions">
+            @if (cart().length > 0) {
+              <button type="button" class="btn-outline" (click)="clearCart()">Vaciar carrito</button>
+            }
+            <button type="button" class="btn-outline" (click)="cartOpen.set(false)">Seguir comprando</button>
+          </div>
+        </div>
 
-  @if (!loading() && !error()) {
-
-    @if (products().length === 0) {
-
-      <p class="message">
-        No existen productos registrados.
-      </p>
-
-    } @else {
-
-      <div class="products-grid">
-
-        @for (product of products(); track product.id) {
-
-          <article class="product-card">
-
-            <div class="product-id">
-              Producto #{{ product.id }}
-            </div>
-
-            <h2>
-              {{ product.name }}
-            </h2>
-
-            <p>
-              <strong>Precio:</strong>
-              ${{ product.price }}
-            </p>
-
-            <p>
-              <strong>Stock:</strong>
-              {{ product.stock }}
-            </p>
-
-            <p>
-              <strong>Estado:</strong>
-
-              @if (product.active) {
-                Activo
-              } @else {
-                Inactivo
-              }
-            </p>
-
-            @if (isAdmin()) {
-
-              @if (editingProductId() === product.id) {
-
-                <div class="edit-product">
-
-                  <h3>Editar producto</h3>
-
-                  <label>
-                    Nombre
-
-                    <input
-                      type="text"
-                      [(ngModel)]="editProduct.name"
-                      maxlength="100"
-                    >
-                  </label>
-
-                  <label>
-                    Precio
-
-                    <input
-                      type="number"
-                      [(ngModel)]="editProduct.price"
-                      min="0.01"
-                      step="0.01"
-                    >
-                  </label>
-
-                  <div class="edit-buttons">
-
-                    <button
-                      type="button"
-                      (click)="updateProduct(product)"
-                    >
-                      Guardar
-                    </button>
-
-                    <button
-                      type="button"
-                      class="secondary-button"
-                      (click)="cancelEdit()"
-                    >
-                      Cancelar
-                    </button>
-
-                  </div>
-
+        @if (cart().length === 0) {
+          <div class="empty-cart">
+            Tu carrito está vacío. Agrega productos desde el catálogo para generar tu boleta de pedido.
+          </div>
+        } @else {
+          <div class="cart-items">
+            @for (item of cart(); track item.product.id) {
+              <div class="cart-item">
+                <img [src]="getProductImage(item.product.name)" [alt]="item.product.name" class="cart-thumb">
+                <div class="cart-item-info">
+                  <strong>{{ item.product.name }}</strong>
+                  <span>Unitario: ${{ item.product.price.toLocaleString('es-CL') }} · Stock máx: {{ item.product.stock }}</span>
                 </div>
 
-              } @else {
-
-                <div class="product-actions">
-
+                <div class="qty-stepper">
+                  <button type="button" class="qty-btn" (click)="updateCartItemQty(item, -1)">−</button>
+                  <span class="cart-qty-val">{{ item.quantity }}</span>
                   <button
                     type="button"
-                    (click)="startEdit(product)"
-                  >
-                    Editar
-                  </button>
-
-                  @if (product.active) {
-                    <button
-                      type="button"
-                      class="danger-button"
-                      (click)="deactivateProduct(product)"
-                    >
-                      Desactivar
-                    </button>
-                  }
-
+                    class="qty-btn"
+                    [disabled]="item.quantity >= item.product.stock"
+                    (click)="updateCartItemQty(item, 1)"
+                  >+</button>
                 </div>
 
-              }
+                <div class="cart-item-subtotal">
+                  ${{ (item.product.price * item.quantity).toLocaleString('es-CL') }}
+                </div>
 
-              <div class="stock-editor">
+                <button type="button" class="btn-remove" (click)="removeFromCart(item.product.id)" title="Quitar">🗑️</button>
+              </div>
+            }
+          </div>
 
-                <label>
-                  Nuevo stock
+          <div class="cart-footer">
+            <div class="cart-total-box">
+              <span>Total a pagar:</span>
+              <strong>${{ cartTotalAmount().toLocaleString('es-CL') }}</strong>
+            </div>
 
-                  <input
-                    type="number"
-                    min="0"
-                    [(ngModel)]="stockValues[product.id]"
-                  >
-                </label>
+            <button
+              type="button"
+              class="btn-checkout"
+              [disabled]="submittingOrder()"
+              (click)="checkoutCart()"
+            >
+              {{ submittingOrder() ? 'Generando boleta de pedido...' : '✅ Confirmar compra y generar boleta' }}
+            </button>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- FORMULARIO NUEVO PRODUCTO (SOLO ADMIN) -->
+    @if (isAdmin() && showCreateForm()) {
+      <div class="create-form">
+        <h2>Crear nuevo producto</h2>
+        <div class="form-row">
+          <label>
+            Nombre del producto
+            <input type="text" [(ngModel)]="newProduct.name" maxlength="100" placeholder="Ej. Webcam Full HD">
+          </label>
+          <label>
+            Precio ($)
+            <input type="number" [(ngModel)]="newProduct.price" min="1" step="1">
+          </label>
+          <label>
+            Stock inicial
+            <input type="number" [(ngModel)]="newProduct.stock" min="0">
+          </label>
+        </div>
+        <button type="button" class="btn-primary" (click)="createProduct()">
+          Guardar producto
+        </button>
+      </div>
+    }
+
+    <!-- LISTADO DE TARJETAS -->
+    @if (loading()) {
+      <div class="loading-box">Cargando catálogo de productos...</div>
+    } @else {
+      <div class="products-grid">
+        @for (product of products(); track product.id) {
+          <article class="product-card" [class.out-of-stock]="!product.active || product.stock <= 0">
+
+            <div class="card-image-wrapper">
+              <img [src]="getProductImage(product.name)" [alt]="product.name" class="card-image">
+              <span class="category-chip">{{ getProductCategory(product.name) }}</span>
+              <span class="stock-chip" [class.stock-empty]="product.stock <= 0">
+                {{ product.stock > 0 ? product.stock + ' disponibles' : 'Sin stock' }}
+              </span>
+            </div>
+
+            <div class="card-body">
+              <div class="card-title-row">
+                <h2>{{ product.name }}</h2>
+                <span class="product-id">#{{ product.id }}</span>
+              </div>
+
+              <p class="product-desc">{{ getProductDescription(product.name) }}</p>
+
+              <div class="price-row">
+                <div>
+                  <span class="price-label">Precio unitario</span>
+                  <div class="price-value">${{ product.price.toLocaleString('es-CL') }}</div>
+                </div>
+                <span class="status-pill" [class.status-inactive]="!product.active">
+                  {{ product.active ? '● Disponible' : '● Inactivo' }}
+                </span>
+              </div>
+
+              <!-- AGREGAR AL CARRITO (PARA TODOS LOS USUARIOS) -->
+              <div class="order-box">
+                <div class="qty-row">
+                  <span class="qty-label">
+                    Cantidad
+                    @if (getQuantityInCart(product.id) > 0) {
+                      <small style="color:#2563eb;">({{ getQuantityInCart(product.id) }} en carrito)</small>
+                    }
+                  </span>
+                  <div class="qty-stepper">
+                    <button
+                      type="button"
+                      class="qty-btn"
+                      [disabled]="!product.active || product.stock <= 0 || (orderQuantities[product.id] || 1) <= 1"
+                      (click)="decrementQty(product)"
+                    >−</button>
+                    <input
+                      type="number"
+                      min="1"
+                      [max]="product.stock"
+                      [disabled]="!product.active || product.stock <= 0"
+                      [(ngModel)]="orderQuantities[product.id]"
+                      class="qty-input"
+                    >
+                    <button
+                      type="button"
+                      class="qty-btn"
+                      [disabled]="!product.active || product.stock <= 0 || (orderQuantities[product.id] || 1) + getQuantityInCart(product.id) >= product.stock"
+                      (click)="incrementQty(product)"
+                    >+</button>
+                  </div>
+                </div>
 
                 <button
                   type="button"
-                  (click)="updateStock(product)"
+                  class="btn-order"
+                  [disabled]="!product.active || product.stock <= 0 || getQuantityInCart(product.id) >= product.stock"
+                  (click)="addToCart(product)"
                 >
-                  Actualizar stock
+                  @if (product.active && product.stock > 0 && getQuantityInCart(product.id) < product.stock) {
+                    🛒 Agregar al carrito
+                  } @else {
+                    Sin stock disponible
+                  }
                 </button>
-
               </div>
 
-            }
+              <!-- PANEL ADMINISTRADOR -->
+              @if (isAdmin()) {
+                <div class="admin-panel">
+                  @if (editingProductId() === product.id) {
+                    <div class="edit-product">
+                      <h3>Editar producto</h3>
+                      <label>
+                        Nombre
+                        <input type="text" [(ngModel)]="editProduct.name" maxlength="100">
+                      </label>
+                      <label>
+                        Precio
+                        <input type="number" [(ngModel)]="editProduct.price" min="1" step="1">
+                      </label>
+                      <div class="edit-buttons">
+                        <button type="button" class="btn-primary" (click)="updateProduct(product)">Guardar</button>
+                        <button type="button" class="btn-secondary" (click)="cancelEdit()">Cancelar</button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="product-actions">
+                      <button type="button" class="btn-outline" (click)="startEdit(product)">Editar</button>
+                      @if (product.active) {
+                        <button type="button" class="btn-danger" (click)="deactivateProduct(product)">Desactivar</button>
+                      }
+                    </div>
+                  }
 
+                  <div class="stock-editor">
+                    <label>Actualizar stock</label>
+                    <div class="stock-inline">
+                      <input type="number" min="0" [(ngModel)]="stockValues[product.id]">
+                      <button type="button" class="btn-dark" (click)="updateStock(product)">Guardar stock</button>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
           </article>
         }
-
       </div>
     }
-  }
-
+  </div>
 </div>

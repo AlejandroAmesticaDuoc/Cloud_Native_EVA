@@ -88,30 +88,18 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/orders/{id}/cancel"
-                        ).access(scopeAndAnyRole(
-                                "ADMIN",
-                                "OPERADOR",
-                                "CLIENTE"
-                        ))
+                        ).hasAuthority(REQUIRED_SCOPE)
 
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/orders"
-                        ).access(scopeAndAnyRole(
-                                "ADMIN",
-                                "CLIENTE",
-                                "OPERADOR"
-                        ))
+                        ).hasAuthority(REQUIRED_SCOPE)
 
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/orders",
                                 "/api/v1/orders/{id}"
-                        ).access(scopeAndAnyRole(
-                                "ADMIN",
-                                "OPERADOR",
-                                "CLIENTE"
-                        ))
+                        ).hasAuthority(REQUIRED_SCOPE)
 
                         .requestMatchers(
                                 HttpMethod.POST,
@@ -153,6 +141,8 @@ public class SecurityConfig {
                                 "ADMIN",
                                 "AUDITOR"
                         ))
+
+                        .requestMatchers("/api/v1/kafka-admin/**").hasAuthority(REQUIRED_SCOPE)
 
                         .anyRequest().denyAll()
                 )

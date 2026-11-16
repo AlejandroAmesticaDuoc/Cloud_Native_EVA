@@ -30,15 +30,13 @@ services:
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
       REPORT_EVENTS_ENABLED: "true"
       REPORT_KAFKA_GROUP: ${REPORT_KAFKA_GROUP:-pedidos360-report-v1}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
       KAFKA_ORDERS_TOPIC: ${KAFKA_ORDERS_TOPIC:-orders.events}
     ports:
       - "127.0.0.1:${REPORT_PORT:-8084}:8084"
     depends_on:
       postgres-report:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
 
   bff:
     environment:

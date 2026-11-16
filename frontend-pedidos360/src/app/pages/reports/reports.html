@@ -1,0 +1,119 @@
+<div class="reports-container">
+  <div class="header">
+    <div>
+      <a routerLink="/dashboard" class="back-link">← Volver al Dashboard</a>
+      <h1>Reportes e Indicadores</h1>
+      <p>Métricas operativas y tiempos de procesamiento de pedidos</p>
+    </div>
+
+    <div class="header-controls">
+      <label class="window-selector">
+        Ventana horaria:
+        <select [ngModel]="hours()" (ngModelChange)="onHoursChange($event)">
+          <option [ngValue]="6">Últimas 6 horas</option>
+          <option [ngValue]="12">Últimas 12 horas</option>
+          <option [ngValue]="24">Últimas 24 horas</option>
+          <option [ngValue]="72">Últimos 3 días</option>
+          <option [ngValue]="168">Últimos 7 días</option>
+        </select>
+      </label>
+
+      <button type="button" (click)="loadReports()">Actualizar</button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="state-box">Cargando indicadores...</div>
+  } @else if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  } @else if (summary(); as data) {
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-label">TOTAL PEDIDOS</span>
+        <strong class="kpi-value">{{ data.totalOrders }}</strong>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">PEDIDOS ACTIVOS</span>
+        <strong class="kpi-value active">{{ data.activeOrders }}</strong>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">ENTREGADOS</span>
+        <strong class="kpi-value delivered">{{ data.deliveredOrders }}</strong>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">CANCELADOS</span>
+        <strong class="kpi-value cancelled">{{ data.cancelledOrders }}</strong>
+      </div>
+
+      <div class="kpi-card highlight">
+        <span class="kpi-label">MONTO ENTREGADO</span>
+        <strong class="kpi-value">${{ data.deliveredAmount | number:'1.0-2' }}</strong>
+      </div>
+    </section>
+
+    @if (leadTime(); as lt) {
+      <section class="panel-card">
+        <h2>Tiempos de Procesamiento (Lead Time)</h2>
+        <p class="subtitle">Basado en {{ lt.deliveredOrders }} pedidos entregados</p>
+
+        <div class="leadtime-grid">
+          <div class="lt-item">
+            <span>Promedio</span>
+            <strong>{{ formatSeconds(lt.averageSeconds) }}</strong>
+          </div>
+          <div class="lt-item">
+            <span>Mínimo</span>
+            <strong>{{ formatSeconds(lt.minimumSeconds) }}</strong>
+          </div>
+          <div class="lt-item">
+            <span>Máximo</span>
+            <strong>{{ formatSeconds(lt.maximumSeconds) }}</strong>
+          </div>
+        </div>
+      </section>
+    }
+
+    <section class="panel-card">
+      <h2>Distribución por Estado</h2>
+      <div class="status-grid">
+        @for (st of statusKeys; track st) {
+          <div class="status-item">
+            <span class="status-tag">{{ st }}</span>
+            <strong>{{ data.ordersByStatus[st] ?? 0 }}</strong>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="panel-card">
+      <h2>Ventas Entregadas por Hora</h2>
+      @if (data.salesByHour.length === 0) {
+        <p class="empty-text">No hay ventas registradas en la ventana seleccionada.</p>
+      } @else {
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Hora (UTC)</th>
+                <th>Pedidos Entregados</th>
+                <th>Monto Entregado</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of data.salesByHour; track row.hour) {
+                <tr>
+                  <td>{{ row.hour | date:'dd/MM/yyyy HH:mm' }}</td>
+                  <td>{{ row.deliveredOrders }}</td>
+                  <td>${{ row.deliveredAmount | number:'1.0-2' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>

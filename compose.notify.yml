@@ -42,8 +42,6 @@ services:
     ports:
       - "127.0.0.1:${NOTIFY_PORT:-8083}:8083"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       mailpit:
         condition: service_started
 

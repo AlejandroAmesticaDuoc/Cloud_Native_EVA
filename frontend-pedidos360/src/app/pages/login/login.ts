@@ -17,7 +17,9 @@ export class Login implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    if (this.msalService.instance.getActiveAccount()) {
+    const accounts = this.msalService.instance.getAllAccounts();
+    if (accounts.length > 0) {
+      this.msalService.instance.setActiveAccount(accounts[0]);
       this.router.navigateByUrl('/dashboard');
     }
   }
@@ -26,14 +28,13 @@ export class Login implements OnInit {
     this.msalService.loginRedirect({
       scopes: [
         environment.msal.apiScope
-      ],
-      redirectStartPage: `${window.location.origin}/dashboard`
+      ]
     });
   }
 
   logout(): void {
     this.msalService.logoutRedirect({
-      postLogoutRedirectUri: 'http://localhost:4200/login'
+      postLogoutRedirectUri: `${window.location.origin}/login`
     });
   }
 
@@ -59,11 +60,8 @@ export class Login implements OnInit {
         environment.msal.apiScope
       ]
     }).then((result) => {
-
       console.log('Access Token obtenido correctamente');
-
       const payload = result.accessToken.split('.')[1];
-
       const decodedPayload = JSON.parse(
         decodeURIComponent(
           atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
@@ -74,14 +72,11 @@ export class Login implements OnInit {
             .join('')
         )
       );
-
       console.log('Claims del Access Token:', decodedPayload);
-
       console.log('Scope:', decodedPayload.scp);
       console.log('Roles:', decodedPayload.roles);
       console.log('Audience:', decodedPayload.aud);
       console.log('Issuer:', decodedPayload.iss);
-
     }).catch((error) => {
       console.error('Error obteniendo Access Token:', error);
     });

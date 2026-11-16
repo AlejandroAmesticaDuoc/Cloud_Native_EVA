@@ -106,7 +106,9 @@
 
       <!-- REPORTES -->
 
-      <div class="module-card disabled-card">
+      <a
+        routerLink="/reports"
+        class="module-card">
 
         <div class="module-icon reports-icon">
           📊
@@ -115,7 +117,7 @@
         <div class="module-content">
           <div class="module-title">
             <h3>Reportes</h3>
-            <span class="pending-badge">En integración</span>
+            <span class="available-badge">Disponible</span>
           </div>
 
           <p>
@@ -125,15 +127,18 @@
 
           <div class="module-footer">
             <span>ms-pedidos360-report</span>
+            <strong>→</strong>
           </div>
         </div>
 
-      </div>
+      </a>
 
 
       <!-- AUDITORÍA -->
 
-      <div class="module-card disabled-card">
+      <a
+        routerLink="/audit"
+        class="module-card">
 
         <div class="module-icon audit-icon">
           🛡️
@@ -142,7 +147,7 @@
         <div class="module-content">
           <div class="module-title">
             <h3>Auditoría</h3>
-            <span class="pending-badge">En integración</span>
+            <span class="available-badge">Disponible</span>
           </div>
 
           <p>
@@ -152,10 +157,41 @@
 
           <div class="module-footer">
             <span>ms-pedidos360-audit</span>
+            <strong>→</strong>
           </div>
         </div>
 
-      </div>
+      </a>
+
+
+      <!-- KAFKA ADMIN -->
+
+      <a
+        routerLink="/kafka-admin"
+        class="module-card">
+
+        <div class="module-icon audit-icon">
+          ⚡
+        </div>
+
+        <div class="module-content">
+          <div class="module-title">
+            <h3>Kafka Admin</h3>
+            <span class="available-badge">Disponible</span>
+          </div>
+
+          <p>
+            Administra tópicos, particiones, consumer groups y
+            publicación de eventos en el clúster Kafka.
+          </p>
+
+          <div class="module-footer">
+            <span>ms-pedidos360-kafka-admin</span>
+            <strong>→</strong>
+          </div>
+        </div>
+
+      </a>
 
     </section>
 

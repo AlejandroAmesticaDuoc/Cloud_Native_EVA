@@ -7,7 +7,11 @@ import {
 
 import {
   HTTP_INTERCEPTORS,
+  HttpHandlerFn,
+  HttpInterceptorFn,
+  HttpRequest,
   provideHttpClient,
+  withInterceptors,
   withInterceptorsFromDi
 } from '@angular/common/http';
 
@@ -31,6 +35,17 @@ import {
   MSALInterceptorConfigFactory
 } from './core/auth/msal.config';
 
+const ngrokHeaderInterceptor: HttpInterceptorFn = (
+  req: HttpRequest<unknown>,
+  next: HttpHandlerFn
+) => {
+  return next(
+    req.clone({
+      setHeaders: { 'ngrok-skip-browser-warning': 'true' }
+    })
+  );
+};
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
@@ -38,6 +53,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
 
     provideHttpClient(
+      withInterceptors([ngrokHeaderInterceptor]),
       withInterceptorsFromDi()
     ),
 
@@ -60,14 +76,19 @@ export const appConfig: ApplicationConfig = {
     MsalGuard,
     MsalBroadcastService,
 
-    /*
-     * Inicializa MSAL ANTES de que Angular
-     * comience a ejecutar guards o servicios.
-     */
-    provideAppInitializer(() => {
+    provideAppInitializer(async () => {
       const msalInstance = inject(MSAL_INSTANCE);
+      await msalInstance.initialize();
 
-      return msalInstance.initialize();
+      let response = null; try { response = await msalInstance.handleRedirectPromise(); } catch (e) { console.error("MSAL redirect error:", e); }
+      if (response?.account) {
+        msalInstance.setActiveAccount(response.account);
+      } else if (!msalInstance.getActiveAccount()) {
+        const accounts = msalInstance.getAllAccounts();
+        if (accounts.length > 0) {
+          msalInstance.setActiveAccount(accounts[0]);
+        }
+      }
     }),
 
     {

@@ -16,14 +16,12 @@ export function MSALInstanceFactory(): IPublicClientApplication {
   return new PublicClientApplication({
     auth: {
       clientId: environment.msal.clientId,
-      authority:
-        `https://login.microsoftonline.com/${environment.msal.tenantId}`,
+      authority: `https://login.microsoftonline.com/${environment.msal.tenantId}`,
       redirectUri: environment.msal.redirectUri,
-      postLogoutRedirectUri: 'http://localhost:4200'
+      postLogoutRedirectUri: `${window.location.origin}/login`
     },
-
     cache: {
-      cacheLocation: BrowserCacheLocation.LocalStorage
+      cacheLocation: BrowserCacheLocation.SessionStorage
     }
   });
 }
@@ -31,28 +29,24 @@ export function MSALInstanceFactory(): IPublicClientApplication {
 export function MSALGuardConfigFactory(): MsalGuardConfiguration {
   return {
     interactionType: InteractionType.Redirect,
-
     authRequest: {
-      scopes: [
-        environment.msal.apiScope
-      ]
+      scopes: [environment.msal.apiScope]
     },
-
     loginFailedRoute: '/login'
   };
 }
 
-export function MSALInterceptorConfigFactory():
-  MsalInterceptorConfiguration {
-
-  const protectedResourceMap =
-    new Map<string, Array<string>>();
+export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
+  const protectedResourceMap = new Map<string, Array<string>>();
 
   protectedResourceMap.set(
-    `${environment.api.baseUrl}/*`,
-    [
-      environment.msal.apiScope
-    ]
+    '/api/v1/*',
+    [environment.msal.apiScope]
+  );
+
+  protectedResourceMap.set(
+    `${window.location.origin}/api/v1/*`,
+    [environment.msal.apiScope]
   );
 
   return {

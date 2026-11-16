@@ -1,0 +1,76 @@
+<div class="audit-container">
+  <div class="header">
+    <div>
+      <a routerLink="/dashboard" class="back-link">← Volver al Dashboard</a>
+      <h1>Auditoría y Trazabilidad</h1>
+      <p>Registro inmutable de eventos y cambios de estado en Pedidos360</p>
+    </div>
+
+    <div class="filter-bar">
+      <input
+        type="number"
+        min="1"
+        placeholder="Filtrar por ID de pedido..."
+        [ngModel]="orderIdFilter()"
+        (ngModelChange)="orderIdFilter.set($event)"
+        (keyup.enter)="loadEvents(true)"
+      />
+      <button type="button" (click)="loadEvents(true)">Buscar</button>
+      @if (orderIdFilter()) {
+        <button type="button" class="secondary-btn" (click)="clearFilter()">Limpiar</button>
+      }
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="state-box">Cargando registros de auditoría...</div>
+  } @else if (error()) {
+    <div class="error-box">{{ error() }}</div>
+  } @else if (records().length === 0) {
+    <div class="state-box">No se encontraron eventos de auditoría registrados.</div>
+  } @else {
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha Registro</th>
+            <th>Evento</th>
+            <th>Pedido</th>
+            <th>Transición</th>
+            <th>Actor / Cliente</th>
+            <th>Total</th>
+            <th>Trace ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of records(); track item.id) {
+            <tr>
+              <td>#{{ item.id }}</td>
+              <td>{{ item.recordedAt | date:'dd/MM/yyyy HH:mm:ss' }}</td>
+              <td><span class="event-badge">{{ item.event.eventType }}</span></td>
+              <td><strong>#{{ item.event.orderId }}</strong></td>
+              <td>
+                @if (item.event.previousStatus) {
+                  <span class="status-prev">{{ item.event.previousStatus }}</span> →
+                }
+                <span class="status-curr">{{ item.event.status || '-' }}</span>
+              </td>
+              <td class="mono">{{ item.event.actorId || item.event.customerId || '-' }}</td>
+              <td>{{ item.event.total !== undefined && item.event.total !== null ? ('$' + item.event.total) : '-' }}</td>
+              <td class="mono small">{{ item.event.traceId || '-' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (nextAfterId() !== null && records().length >= 50) {
+      <div class="pagination-bar">
+        <button type="button" [disabled]="loadingMore()" (click)="loadEvents(false)">
+          {{ loadingMore() ? 'Cargando...' : 'Cargar más eventos' }}
+        </button>
+      </div>
+    }
+  }
+</div>
