@@ -54,4 +54,11 @@ public class OrdersController {
         service.cancel(id, CurrentUser.from(authentication), TraceIdFilter.resolve(request));
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/{id}")
+    @ApiResponse(responseCode = "204", description = "Pedido eliminado", content = @Content)
+    public ResponseEntity<Void> delete(@PathVariable @Positive long id, JwtAuthenticationToken authentication) {
+        service.delete(id, CurrentUser.from(authentication));
+        return ResponseEntity.noContent().build();
+    }
 }

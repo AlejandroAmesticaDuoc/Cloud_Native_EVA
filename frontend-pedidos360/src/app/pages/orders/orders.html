@@ -100,6 +100,10 @@
               @if (order.status === 'CREADO') {
                 <button type="button" style="background:#dc2626;" (click)="cancelOrder(order)">Cancelar pedido</button>
               }
+
+              @if (canDeleteOrders() && order.status === 'CANCELADO') {
+                <button type="button" style="background:#7f1d1d; color:#ffffff;" (click)="deleteOrder(order)">🗑️ Eliminar pedido</button>
+              }
             </div>
           </div>
         </article>

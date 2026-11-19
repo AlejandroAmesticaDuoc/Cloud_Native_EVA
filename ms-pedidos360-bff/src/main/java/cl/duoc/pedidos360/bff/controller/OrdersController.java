@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -120,6 +121,29 @@ public class OrdersController {
             JwtAuthenticationToken authentication) {
 
         ordersService.cancelOrder(
+                id,
+                currentUser(authentication)
+        );
+
+        return ResponseEntity
+                .noContent()
+                .build();
+    }
+
+    @DeleteMapping("/{id}")
+    @ApiResponse(
+            responseCode = "204",
+            description = "Pedido eliminado correctamente",
+            content = @Content
+    )
+    public ResponseEntity<Void> deleteOrder(
+            @PathVariable
+            @Positive(message =
+                    "El identificador del pedido debe ser positivo")
+            long id,
+            JwtAuthenticationToken authentication) {
+
+        ordersService.deleteOrder(
                 id,
                 currentUser(authentication)
         );

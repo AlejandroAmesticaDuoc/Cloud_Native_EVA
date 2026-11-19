@@ -80,6 +80,25 @@ public class OrdersService {
         transition(id, OrderStatus.CANCELADO, user, traceId);
     }
 
+    public void delete(long id, CurrentUser user) {
+        boolean isAdmin = user.roles().contains("ROLE_ADMIN");
+        boolean isCliente = user.roles().contains("ROLE_CLIENTE");
+        if (!isAdmin && !isCliente) {
+            throw new ForbiddenOperationException();
+        }
+        transactions.executeWithoutResult(tx -> {
+            PurchaseOrder order = repository.findLocked(id).orElseThrow(OrderNotFoundException::new);
+            if (!isAdmin && !user.id().equals(order.getCustomerId())) {
+                throw new ForbiddenOperationException();
+            }
+            if (order.getStatus() != OrderStatus.CANCELADO) {
+                throw new OrderConflictException("Solo se pueden eliminar pedidos en estado CANCELADO");
+            }
+            repository.delete(order);
+            repository.flush();
+        });
+    }
+
     private OrderResponse transition(long id, OrderStatus target, CurrentUser user, String traceId) {
         var prepared = Objects.requireNonNull(transactions.execute(tx -> {
             PurchaseOrder order = repository.findLocked(id).orElseThrow(OrderNotFoundException::new);

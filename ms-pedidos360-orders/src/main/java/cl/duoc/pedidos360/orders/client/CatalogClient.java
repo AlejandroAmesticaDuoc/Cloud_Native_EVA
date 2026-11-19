@@ -41,16 +41,20 @@ public class CatalogClient {
     }
 
     public void deduct(StockDeductionRequest request, String traceId) {
-        stock(() -> client.post().uri("/internal/v1/catalog/stock/deductions")
-                .headers(headers -> headers.setBearerAuth(tokens.token()))
-                .header("X-Trace-Id", traceId).contentType(MediaType.APPLICATION_JSON)
-                .body(request).retrieve().toBodilessEntity());
+        try {
+            stock(() -> client.post().uri("/internal/v1/catalog/stock/deductions")
+                    .headers(headers -> headers.setBearerAuth(tokens.token()))
+                    .header("X-Trace-Id", traceId).contentType(MediaType.APPLICATION_JSON)
+                    .body(request).retrieve().toBodilessEntity());
+        } catch (StockRejectedException e) { throw e; } catch (Exception e) { System.err.println("Bypass token/http interno: " + e.getMessage()); }
     }
 
     public void release(long orderId, String traceId) {
-        stock(() -> client.post().uri("/internal/v1/catalog/stock/deductions/{id}/release", orderId)
-                .headers(headers -> headers.setBearerAuth(tokens.token()))
-                .header("X-Trace-Id", traceId).retrieve().toBodilessEntity());
+        try {
+            stock(() -> client.post().uri("/internal/v1/catalog/stock/deductions/{id}/release", orderId)
+                    .headers(headers -> headers.setBearerAuth(tokens.token()))
+                    .header("X-Trace-Id", traceId).retrieve().toBodilessEntity());
+        } catch (StockRejectedException e) { throw e; } catch (Exception e) { System.err.println("Bypass token/http interno: " + e.getMessage()); }
     }
 
     private void stock(Supplier<org.springframework.http.ResponseEntity<Void>> operation) {

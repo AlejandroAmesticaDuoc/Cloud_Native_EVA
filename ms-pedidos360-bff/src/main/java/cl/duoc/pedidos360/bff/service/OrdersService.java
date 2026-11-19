@@ -97,6 +97,36 @@ public class OrdersService {
         ordersClient.cancelOrder(id);
     }
 
+    public void deleteOrder(
+            long id,
+            CurrentUser currentUser) {
+
+        boolean isAdmin = currentUser.hasRole("ADMIN");
+        boolean isCliente = currentUser.hasRole("CLIENTE");
+
+        if (!isAdmin && !isCliente) {
+            throw new ForbiddenOperationException(
+                    FORBIDDEN_MESSAGE
+            );
+        }
+
+        if (!isAdmin) {
+            OrderResponse order =
+                    ordersClient.getOrder(id);
+
+            if (order == null
+                    || !currentUser.userId().equals(
+                            order.customerId()
+                    )) {
+                throw new ForbiddenOperationException(
+                        FORBIDDEN_MESSAGE
+                );
+            }
+        }
+
+        ordersClient.deleteOrder(id);
+    }
+
     private void verifyOwnership(
             OrderResponse order,
             CurrentUser currentUser) {

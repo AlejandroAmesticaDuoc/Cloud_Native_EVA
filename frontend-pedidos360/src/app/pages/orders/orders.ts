@@ -37,6 +37,7 @@ export class Orders implements OnInit {
 
   canCreate = signal(false);
   canUpdateStatus = signal(false);
+  canDeleteOrders = signal(false);
 
   statusValues: Record<number, OrderStatus> = {};
 
@@ -74,6 +75,9 @@ export class Orders implements OnInit {
         this.canCreate.set(true);
         this.canUpdateStatus.set(
           roles.some(role => role.includes('ADMIN') || role.includes('OPERADOR'))
+        );
+        this.canDeleteOrders.set(
+          roles.some(role => role.includes('ADMIN') || role.includes('CLIENTE'))
         );
       },
       error: (err) => console.error('Error obteniendo usuario:', err)
@@ -176,6 +180,21 @@ export class Orders implements OnInit {
     this.ordersApi.cancelOrder(order.id).subscribe({
       next: () => this.loadOrders(),
       error: () => this.error.set('No fue posible cancelar el pedido.')
+    });
+  }
+
+  deleteOrder(order: Order): void {
+    if (!confirm(`¿Seguro que deseas eliminar permanentemente el pedido #${order.id}?`)) {
+      return;
+    }
+    this.ordersApi.deleteOrder(order.id).subscribe({
+      next: () => {
+        if (this.highlightedOrder()?.id === order.id) {
+          this.clearBoletaSearch();
+        }
+        this.loadOrders();
+      },
+      error: () => this.error.set('No fue posible eliminar el pedido. Solo se pueden eliminar pedidos en estado CANCELADO.')
     });
   }
 }

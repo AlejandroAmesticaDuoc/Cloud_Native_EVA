@@ -179,6 +179,18 @@ public class OrdersClient {
         );
     }
 
+    public void deleteOrder(long id) {
+        execute(() -> restClient
+                .delete()
+                .uri(
+                        ORDERS_PATH + "/{id}",
+                        id
+                )
+                .retrieve()
+                .toBodilessEntity()
+        );
+    }
+
     private <T> T execute(Supplier<T> operation) {
         try {
             return operation.get();

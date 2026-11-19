@@ -48,6 +48,8 @@ public class SecurityConfig {
                         .access(scopeAndRole("ADMIN", "OPERADOR"))
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders/{id}/cancel")
                         .hasAuthority(SCOPE)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/orders/{id}")
+                        .access(scopeAndRole("ADMIN", "CLIENTE"))
                         .anyRequest().denyAll())
                 .exceptionHandling(errorsConfig -> errorsConfig.authenticationEntryPoint(errors).accessDeniedHandler(errors))
                 .oauth2ResourceServer(oauth -> oauth.authenticationEntryPoint(errors).accessDeniedHandler(errors)

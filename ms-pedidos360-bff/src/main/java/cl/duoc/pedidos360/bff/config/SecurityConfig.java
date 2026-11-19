@@ -91,6 +91,14 @@ public class SecurityConfig {
                         ).hasAuthority(REQUIRED_SCOPE)
 
                         .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/v1/orders/{id}"
+                        ).access(scopeAndAnyRole(
+                                "ADMIN",
+                                "CLIENTE"
+                        ))
+
+                        .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/orders"
                         ).hasAuthority(REQUIRED_SCOPE)
